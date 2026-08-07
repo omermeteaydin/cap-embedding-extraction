@@ -347,3 +347,33 @@ mock'layarak izole test edildi: `normalize=False` → norm≈22.3 (normalize edi
   dayanıyor (referanstaki `input_detections[0]["imgUID"]` kullanımıyla tutarlı)
   — düşük risk, ama gerçek SDK ile ilk testte teyit edilmeli.
 - Perception Encoder tarafı hâlâ doğrulanamadı (bkz. §8.2).
+
+---
+
+## 10. Gerçek Ortam Testi Bulgusu (QuickGELU)
+
+İlk gerçek çalıştırmada (senin makinende, Claude Code üzerinden) şu uyarı
+gözlemlendi: `"a red buoy on water"` metni için `ViT-B-16` ile 512-D embedding
+başarıyla üretildi, ancak model config'i ile OpenAI'nin pretrained
+ağırlıkları arasında bir "QuickGELU mismatch" uyarısı çıktı.
+
+**Kök neden (doğrulandı):** `open_clip.get_pretrained_cfg("ViT-B-16", "openai")`
+config'inde `quick_gelu: True` alanı var — yani OpenAI'nin orijinal CLIP
+ağırlıkları (`ViT-B-16`, `ViT-B-32`, `RN50` — üçü de kontrol edildi) `QuickGELU`
+aktivasyonuyla eğitilmiş. `create_model_and_transforms()` çağrısında
+`force_quick_gelu=True` verilmezse model varsayılan (standart) `nn.GELU` ile
+kurulur ve ağırlıklar yanlış aktivasyon fonksiyonuyla yüklenmiş olur.
+
+**Risk:** Bu "zararsız" bir uyarı değil — forward pass hatasız çalışır ve
+bir embedding üretir, ama üretilen embedding eğitim zamanındaki aktivasyon
+fonksiyonundan sapar. Yani sonuç sessizce hatalı olabilir (çalışıyor
+görünür ama kalitesi düşük olabilir).
+
+**Doğrulama:** Bu ortamda katman tipi doğrudan incelendi:
+```python
+force_quick_gelu=False (varsayılan) -> nn.GELU
+force_quick_gelu=True               -> nn.QuickGELU
+```
+
+**Düzeltme:** `src/utils/utils.py::EmbeddingModelLoader._load_clip()` ve
+`apps/quick_test.py` içinde `force_quick_gelu=True` eklendi.

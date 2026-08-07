@@ -133,8 +133,16 @@ class EmbeddingModelLoader:
         import open_clip  # pip install open_clip_torch
 
         model_name, pretrained = CLIP_VERSION_TO_OPEN_CLIP[self.model_version]
+        # OpenAI'nin orijinal CLIP ağırlıkları (ViT-B-16/32, RN50) QuickGELU
+        # aktivasyonuyla eğitilmiştir (open_clip.get_pretrained_cfg(...)["quick_gelu"]
+        # == True). force_quick_gelu verilmezse model varsayılan (standart) GELU ile
+        # kurulur ve ağırlıklar yanlış aktivasyon fonksiyonuyla yüklenmiş olur --
+        # forward pass çalışır ama embedding'ler eğitim zamanındakinden sapar.
+        # Doğrulama: force_quick_gelu=False -> nn.GELU, True -> nn.QuickGELU
+        # (bu ortamda open_clip.get_pretrained_cfg ile ve katman tipini
+        # inceleyerek test edildi).
         model, _, preprocess = open_clip.create_model_and_transforms(
-            model_name, pretrained=pretrained
+            model_name, pretrained=pretrained, force_quick_gelu=True
         )
         self.model = model.to(self.device).eval()
         self.preprocess = preprocess

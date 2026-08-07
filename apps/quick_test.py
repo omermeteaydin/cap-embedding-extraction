@@ -35,7 +35,11 @@ def main():
     if not args.image and not args.text:
         parser.error("--image veya --text parametrelerinden en az biri verilmeli")
 
-    model, _, preprocess = open_clip.create_model_and_transforms(args.version, pretrained="openai")
+    # OpenAI ağırlıkları QuickGELU ile eğitilmiştir; force_quick_gelu=True
+    # verilmezse embedding kalitesi sessizce bozulur (bkz. src/utils/utils.py::_load_clip)
+    model, _, preprocess = open_clip.create_model_and_transforms(
+        args.version, pretrained="openai", force_quick_gelu=True
+    )
     model = model.eval()  # GPU yoksa otomatik CPU'da kalır
     tokenizer = open_clip.get_tokenizer(args.version)
 
