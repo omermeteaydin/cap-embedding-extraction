@@ -1,11 +1,11 @@
 """
 apps/quick_test.py
 
-sdks.novavision OLMADAN, doğrudan open_clip ile hızlı yerel test.
-GPU'nuz olmayan kendi bilgisayarınızda CLIP'i hemen denemek içindir;
-gerçek Novavision platform akışı `apps/inference.py`'dir.
+Quick local test WITHOUT sdks.novavision, using open_clip directly.
+For trying out CLIP right away on your own machine without a GPU;
+the real Novavision platform flow is `apps/inference.py`.
 
-Kullanım:
+Usage:
     pip install open_clip_torch pillow numpy torch
     python apps/quick_test.py --image resources/sample.jpg --version ViT-B-16
     python apps/quick_test.py --text "a red buoy on water" --version ViT-B-16
@@ -33,14 +33,14 @@ def main():
     args = parser.parse_args()
 
     if not args.image and not args.text:
-        parser.error("--image veya --text parametrelerinden en az biri verilmeli")
+        parser.error("At least one of --image or --text must be given")
 
-    # OpenAI ağırlıkları QuickGELU ile eğitilmiştir; force_quick_gelu=True
-    # verilmezse embedding kalitesi sessizce bozulur (bkz. src/utils/utils.py::_load_clip)
+    # OpenAI weights were trained with QuickGELU; without force_quick_gelu=True
+    # embedding quality silently degrades (see src/utils/utils.py::_load_clip)
     model, _, preprocess = open_clip.create_model_and_transforms(
         args.version, pretrained="openai", force_quick_gelu=True
     )
-    model = model.eval()  # GPU yoksa otomatik CPU'da kalır
+    model = model.eval()  # falls back to CPU automatically if no GPU
     tokenizer = open_clip.get_tokenizer(args.version)
 
     with torch.no_grad():

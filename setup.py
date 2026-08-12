@@ -12,7 +12,7 @@ setuptools.setup(
         "open_clip_torch>=2.24.0",
         "numpy",
         "Pillow",
-        # Perception Encoder isteğe bağlı (GPU gerektirir, ayrı kurulum):
+        # Perception Encoder is optional (requires GPU, separate install):
         # git+https://github.com/facebookresearch/perception_models.git
     ],
     classifiers=[

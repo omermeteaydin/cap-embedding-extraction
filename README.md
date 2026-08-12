@@ -1,26 +1,27 @@
 # cap-embedding-extraction
 
-CLIP ve Perception Encoder modelleriyle görüntü/metin embedding'i üreten
-Novavision capsule paketi. Yapı, `cap-object-tracking` (ObjectTracking)
-paketindeki gerçek konvansiyonlarla (PackageModel, PackageHelper,
-Application().get_param(), Capsule/Executor akışı) hizalanmıştır.
+A Novavision capsule package that produces image/text embeddings using CLIP
+and Perception Encoder models. The structure is aligned with the real
+conventions of the `cap-object-tracking` (ObjectTracking) package
+(PackageModel, PackageHelper, Application().get_param(), Capsule/Executor
+flow).
 
-- Girdi: tek bir görüntü **veya** serbest metin (`inputData`)
-- Çıktı: float embedding vektörü (`outputEmbedding`) + meta bilgi (`outputMeta`)
-- İki ayrı executor: `ClipEmbedding` ve `PerceptionEncoderEmbedding`
-- Detaylı dokümantasyon: `DOCUMENTATION.md`
+- Input: a single image **or** free text (`inputData`)
+- Output: float embedding vector (`outputEmbedding`) + metadata (`outputMeta`)
+- Two separate executors: `ClipEmbedding` and `PerceptionEncoderEmbedding`
+- Detailed documentation: `DOCUMENTATION.md`
 
-## GPU gerekiyor mu?
+## Do I need a GPU?
 
-| Yöntem | GPU şart mı? |
+| Method | GPU required? |
 |---|---|
-| CLIP (ViT-B-16 / ViT-B-32 / RN50) | ❌ Hayır — CPU'da çalışır |
-| Perception Encoder | ✅ Evet — CUDA zorunlu |
+| CLIP (ViT-B-16 / ViT-B-32 / RN50) | No -- runs on CPU |
+| Perception Encoder | Yes -- CUDA required |
 
-GPU'nuz yoksa **CLIP executor'ıyla başlayın**; Perception Encoder tarafı
-şimdilik doğrulanmamış (bkz. aşağıdaki uyarı).
+If you don't have a GPU, **start with the CLIP executor**; the Perception
+Encoder side is not verified yet (see the note below).
 
-## Hızlı test (SDK olmadan, sadece open_clip ile)
+## Quick test (without the SDK, using open_clip directly)
 
 ```bash
 pip install -r requirements.txt
@@ -28,24 +29,24 @@ python apps/quick_test.py --image resources/sample.jpg --version ViT-B-16
 python apps/quick_test.py --text "a red buoy on water" --version ViT-B-16
 ```
 
-## Gerçek platform akışı (SDK ile)
+## Real platform flow (with the SDK)
 
-`apps/inference.py` — `ObjectTracking/apps/inference.py` ile aynı desende,
-`PackageModel` üzerinden HTTP endpoint'ine istek gönderir.
+`apps/inference.py` -- same pattern as `ObjectTracking/apps/inference.py`,
+sends a request to the HTTP endpoint through `PackageModel`.
 
-## ⚠ Bilinmesi gerekenler
+## Things to know
 
-- `sdks.novavision` import'ları ve `PackageHelper.build_model()` /
-  `Application().get_param()` / `Image.get_frame()` çağrıları,
-  `ObjectTracking` (cap-object-tracking) paketindeki gerçek kullanımdan
-  birebir örneklenmiştir.
-- CLIP tarafı `open_clip_torch` ile tam çalışır durumdadır ve bu ortamda
-  (ağırlık indirmeden, rastgele başlatılmış model ile) forward-pass
-  mekaniği doğrulanmıştır.
-- Perception Encoder tarafı Meta'nın `perception_models` paketine
-  bağımlıdır ve bu ortamda test edilememiştir; `src/utils/utils.py`
-  içindeki `_load_perception_encoder` fonksiyonu en iyi çaba
-  (best-effort) yazılmıştır — üretime almadan önce mutlaka manuel
-  doğrulama yapılmalı.
-- Kendi `BoTSORTTracker/reid.py`'nizdeki appearance-extractor deseni
-  (crop → batch → normalize → cache) referans alınmıştır.
+- The `sdks.novavision` imports and the `PackageHelper.build_model()` /
+  `Application().get_param()` / `Image.get_frame()` calls were modeled
+  one-to-one on the real usage in the `ObjectTracking` (cap-object-tracking)
+  package.
+- The CLIP side is fully functional with `open_clip_torch`, and the
+  forward-pass mechanics were verified in this environment (without
+  downloading weights, using a randomly-initialized model).
+- The Perception Encoder side depends on Meta's `perception_models` package
+  and could not be tested in this environment; the
+  `_load_perception_encoder` function in `src/utils/utils.py` was written
+  as best-effort -- manual verification is required before using it in
+  production.
+- The appearance-extractor pattern in your own `BoTSORTTracker/reid.py`
+  (crop -> batch -> normalize -> cache) was used as a reference.

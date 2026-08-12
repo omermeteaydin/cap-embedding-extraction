@@ -18,8 +18,8 @@ ENDPOINT_URL = "http://127.0.0.1:8000/api"
 
 
 def _build_clip_configs():
-    """ConfigClipAdvance=True altında version/normalize ayarlarını taşır --
-    `ObjectTracking`'deki ConfigBoTSortAdvance kullanımıyla aynı desen."""
+    """Carries version/normalize settings under ConfigClipAdvance=True --
+    same pattern as the ConfigBoTSortAdvance usage in `ObjectTracking`."""
     configClipVersion = ConfigClipVersion(value="ViT-B-16")
     configClipNormalize = ConfigClipNormalize(value=True)
     configClipAdvanceTrue = ConfigClipAdvanceTrue(
@@ -31,7 +31,7 @@ def _build_clip_configs():
 
 
 def inference_image():
-    """Görüntüden CLIP embedding üretimi örneği."""
+    """Example: producing a CLIP embedding from an image."""
     imread = cv2.imread("/opt/project/capsules/EmbeddingExtraction/resources/sample.jpg")
     image_obj = Image(name="Sample", uID="001", mimeType="image/jpg", encoding="bytes", value=imread, type="Image")
     image_obj = image.encode64(image_obj)
@@ -52,7 +52,7 @@ def inference_image():
 
 
 def inference_text():
-    """Serbest metinden CLIP embedding üretimi örneği."""
+    """Example: producing a CLIP embedding from free text."""
     inputData = InputData(value="a red buoy on water")
 
     clipConfigs = _build_clip_configs()

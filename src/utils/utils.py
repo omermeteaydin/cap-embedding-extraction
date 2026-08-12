@@ -1,17 +1,17 @@
 """
 utils.py
 
-CLIP / Perception Encoder model yükleme ve embedding çıkarım yardımcıları.
-`BoTSORTTracker/reid.py`'deki appearance-extractor deseniyle (cropping,
-batching, normalisation, caching) aynı ruhta yazılmıştır.
+CLIP / Perception Encoder model loading and embedding extraction helpers.
+Written in the same spirit as the appearance-extractor pattern in
+`BoTSORTTracker/reid.py` (cropping, batching, normalization, caching).
 
-Notlar:
-- CLIP tarafı `open_clip_torch` paketiyle tam çalışır durumdadır
-  (pip install open_clip_torch); GPU şart değildir, CPU'da da çalışır.
-- Perception Encoder tarafı Meta'nın `perception_models` paketine
-  bağımlıdır ve GPU/CUDA zorunludur (bkz. Roboflow'un
-  roboflow_core/perception_encoder@v1 blok dokümantasyonu). Bu ortamda
-  paket kurulu olmadığından en iyi çaba (best-effort) yazılmıştır.
+Notes:
+- The CLIP path is fully functional via `open_clip_torch`
+  (pip install open_clip_torch); GPU is not required, it also runs on CPU.
+- The Perception Encoder path depends on Meta's `perception_models` package
+  and requires GPU/CUDA (see Roboflow's roboflow_core/perception_encoder@v1
+  block documentation). Written as best-effort since the package is not
+  installed in this environment.
 """
 
 from types import SimpleNamespace
@@ -34,10 +34,10 @@ PERCEPTION_ENCODER_VERSIONS = {"PE-Core-B16-224", "PE-Core-L14-336"}
 
 
 def _build_clip_cfg(config):
-    """`_build_bot_sort_cfg` ile aynı desende: Application().get_param() ile
-    ConfigClipAdvance toggle'ını okur; True ise alt config'leri, False ise
-    varsayılanları kullanır. Config değerleri SADECE burada, bootstrap()
-    içinde okunur -- request.get_param() yalnızca inputs için kullanılır."""
+    """Same pattern as `_build_bot_sort_cfg`: reads the ConfigClipAdvance
+    toggle via Application().get_param(); if True, reads the sub-configs,
+    if False, uses defaults. Config values are read ONLY here, inside
+    bootstrap() -- request.get_param() is used only for inputs."""
     application = Application()
     advance = application.get_param(config=config, name="ConfigClipAdvance")
 
@@ -48,7 +48,7 @@ def _build_clip_cfg(config):
             model_family="CLIP",
             model_version=version or "ViT-B-16",
             normalize=normalize if normalize is not None else True,
-            device="cpu",  # CLIP için GPU şart değil; CUDA varsa otomatik kullanılır
+            device="cpu",  # GPU is not required for CLIP; CUDA is used automatically if available
         )
 
     return SimpleNamespace(
@@ -70,7 +70,7 @@ def _build_perception_encoder_cfg(config):
             model_family="PerceptionEncoder",
             model_version=version or "PE-Core-B16-224",
             normalize=normalize if normalize is not None else True,
-            device="cuda",  # ⚠ Perception Encoder GPU/CUDA zorunlu
+            device="cuda",  # Perception Encoder requires GPU/CUDA
         )
 
     return SimpleNamespace(
@@ -85,29 +85,29 @@ def resolve_model_version(model_family: str, model_version: str) -> str:
     if model_family == "CLIP":
         if model_version not in CLIP_VERSION_TO_OPEN_CLIP:
             raise ValueError(
-                f"Bilinmeyen CLIP versiyonu: '{model_version}'. "
-                f"Desteklenenler: {list(CLIP_VERSION_TO_OPEN_CLIP.keys())}"
+                f"Unknown CLIP version: '{model_version}'. "
+                f"Supported: {list(CLIP_VERSION_TO_OPEN_CLIP.keys())}"
             )
     elif model_family == "PerceptionEncoder":
         if model_version not in PERCEPTION_ENCODER_VERSIONS:
             raise ValueError(
-                f"Bilinmeyen Perception Encoder versiyonu: '{model_version}'. "
-                f"Desteklenenler: {sorted(PERCEPTION_ENCODER_VERSIONS)}"
+                f"Unknown Perception Encoder version: '{model_version}'. "
+                f"Supported: {sorted(PERCEPTION_ENCODER_VERSIONS)}"
             )
     else:
-        raise ValueError(f"Bilinmeyen model ailesi: '{model_family}'")
+        raise ValueError(f"Unknown model family: '{model_family}'")
     return model_version
 
 
 class EmbeddingModelLoader:
-    """CLIP veya Perception Encoder modelini yükleyip cache'te tutan sınıf.
-    `bootstrap()` içinde bir kez oluşturulur, `run()` çağrılarında tekrar
-    kullanılır (reid.py'deki ReID sınıfıyla aynı yaşam döngüsü).
+    """Loads and caches the CLIP or Perception Encoder model.
+    Created once inside `bootstrap()`, reused across `run()` calls
+    (same lifecycle as the ReID class in reid.py).
 
-    `normalize`, config'ten bootstrap-time'da okunup burada sabitlenir --
-    çalışma zamanında (`run()` içinde) tekrar config'ten okunmaz, çünkü
-    referans SDK deseninde config'ler yalnızca bootstrap() içinde
-    Application().get_param() ile okunur (bkz. utils.py:_build_clip_cfg)."""
+    `normalize` is read from config at bootstrap-time and fixed here --
+    it is not re-read from config at runtime (inside `run()`), because
+    the reference SDK pattern only reads configs inside bootstrap() via
+    Application().get_param() (see utils.py:_build_clip_cfg)."""
 
     def __init__(self, model_family: str, model_version: str, normalize: bool = True,
                  device: str = None):
@@ -127,20 +127,21 @@ class EmbeddingModelLoader:
         elif self.model_family == "PerceptionEncoder":
             self._load_perception_encoder()
         else:
-            raise ValueError(f"Bilinmeyen model ailesi: '{self.model_family}'")
+            raise ValueError(f"Unknown model family: '{self.model_family}'")
 
     def _load_clip(self):
         import open_clip  # pip install open_clip_torch
 
         model_name, pretrained = CLIP_VERSION_TO_OPEN_CLIP[self.model_version]
-        # OpenAI'nin orijinal CLIP ağırlıkları (ViT-B-16/32, RN50) QuickGELU
-        # aktivasyonuyla eğitilmiştir (open_clip.get_pretrained_cfg(...)["quick_gelu"]
-        # == True). force_quick_gelu verilmezse model varsayılan (standart) GELU ile
-        # kurulur ve ağırlıklar yanlış aktivasyon fonksiyonuyla yüklenmiş olur --
-        # forward pass çalışır ama embedding'ler eğitim zamanındakinden sapar.
-        # Doğrulama: force_quick_gelu=False -> nn.GELU, True -> nn.QuickGELU
-        # (bu ortamda open_clip.get_pretrained_cfg ile ve katman tipini
-        # inceleyerek test edildi).
+        # OpenAI's original CLIP weights (ViT-B-16/32, RN50) were trained
+        # with QuickGELU activation (open_clip.get_pretrained_cfg(...)["quick_gelu"]
+        # == True). Without force_quick_gelu, the model is built with the
+        # default (standard) GELU and the weights end up loaded with the
+        # wrong activation function -- the forward pass still runs, but
+        # embeddings drift from what the model produced at training time.
+        # Verified: force_quick_gelu=False -> nn.GELU, True -> nn.QuickGELU
+        # (tested in this environment via open_clip.get_pretrained_cfg and
+        # by inspecting the actual layer type).
         model, _, preprocess = open_clip.create_model_and_transforms(
             model_name, pretrained=pretrained, force_quick_gelu=True
         )
@@ -149,15 +150,15 @@ class EmbeddingModelLoader:
         self.tokenizer = open_clip.get_tokenizer(model_name)
 
     def _load_perception_encoder(self):
-        """⚠ Bu ortamda doğrulanamadı — bkz. modül docstring'i."""
+        """Not verified in this environment -- see module docstring."""
         try:
             import core.vision_encoder.pe as pe  # type: ignore
             import core.vision_encoder.transforms as pe_transforms  # type: ignore
         except ImportError as exc:
             raise RuntimeError(
-                "Perception Encoder paketi bulunamadı. Kurulum: "
+                "Perception Encoder package not found. Install with: "
                 "pip install git+https://github.com/facebookresearch/perception_models.git "
-                "-- GPU/CUDA zorunludur."
+                "-- GPU/CUDA is required."
             ) from exc
 
         model = pe.CLIP.from_config(self.model_version, pretrained=True)
@@ -167,9 +168,9 @@ class EmbeddingModelLoader:
 
     @torch.no_grad()
     def embed_image(self, image_array: np.ndarray, normalize: bool = None) -> np.ndarray:
-        """NumPy (H, W, 3) RGB array -> embedding vektörü.
-        `normalize` verilmezse (None), bootstrap-time'da config'ten
-        okunan `self.normalize` kullanılır."""
+        """NumPy (H, W, 3) RGB array -> embedding vector.
+        If `normalize` is not given (None), the bootstrap-time
+        `self.normalize` read from config is used."""
         pil_image = PILImage.fromarray(image_array.astype("uint8"), "RGB")
         tensor = self.preprocess(pil_image).unsqueeze(0).to(self.device)
         features = self.model.encode_image(tensor)
@@ -177,7 +178,7 @@ class EmbeddingModelLoader:
 
     @torch.no_grad()
     def embed_text(self, text: str, normalize: bool = None) -> np.ndarray:
-        """Serbest metin -> embedding vektörü."""
+        """Free text -> embedding vector."""
         tokens = self.tokenizer([text]).to(self.device)
         features = self.model.encode_text(tokens)
         return self._postprocess(features, self.normalize if normalize is None else normalize)
@@ -190,7 +191,7 @@ class EmbeddingModelLoader:
 
 
 def load_clip_loader(config) -> EmbeddingModelLoader:
-    """`load_bot_sort_tracker` ile aynı desende: config'ten CLIP loader'ı kurar."""
+    """Same pattern as `load_bot_sort_tracker`: builds a CLIP loader from config."""
     cfg = _build_clip_cfg(config) if isinstance(config, dict) else config
     return EmbeddingModelLoader(
         model_family=cfg.model_family,

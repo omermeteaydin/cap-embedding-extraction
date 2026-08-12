@@ -1,115 +1,115 @@
 # EmbeddingExtraction - DOCUMENTATION
 
-## 1. Genel Bakış
+## 1. Overview
 
-### Paketin amacı ve ne yaptığı
+### Purpose of the package
 
-EmbeddingExtraction paketi, görüntülerden ve/veya serbest metinden **CLIP** ya da **Perception Encoder** modelleriyle semantik embedding vektörü üreten bir capsule uygulamasıdır. `cap-object-tracking` (ObjectTracking) paketinin gerçek konvansiyonlarıyla (PackageModel/PackageHelper/Application().get_param()/Capsule-Executor akışı) hizalanmıştır. Bu paket:
+The EmbeddingExtraction package is a capsule that produces semantic embedding vectors from images and/or free text using **CLIP** or **Perception Encoder** models. It is aligned with the real conventions of the `cap-object-tracking` (ObjectTracking) package (PackageModel/PackageHelper/Application().get_param()/Capsule-Executor flow). This package:
 
-- Tek bir görüntü veya metin kabul eder
-- İki ayrı executor sunar: `ClipEmbedding` ve `PerceptionEncoderEmbedding`
-- Çıktıyla birlikte hangi model/versiyonla üretildiğine dair meta bilgi döner
-- Opsiyonel L2-normalizasyon uygular
+- Accepts a single image or text
+- Exposes two separate executors: `ClipEmbedding` and `PerceptionEncoderEmbedding`
+- Returns metadata alongside the output indicating which model/version produced it
+- Applies optional L2 normalization
 
-### Temel özellikler
+### Key features
 
-- ✅ Görüntüden ve metinden semantik embedding çıkarımı
-- ✅ CLIP versiyonları: ViT-B-16, ViT-B-32, RN50 (CPU'da çalışır, GPU şart değil)
-- ✅ Perception Encoder versiyonları: PE-Core-B16-224, PE-Core-L14-336 (⚠ GPU/CUDA zorunlu)
-- ✅ L2-normalizasyon (açılıp kapatılabilir config)
-- ✅ `ObjectTracking`'deki "Advance" toggle deseniyle birebir aynı, `restart=True` taşıyan iç içe config yapısı (`ConfigClipAdvance` → True/False varyantları, bkz. §5.1 ve §9.3)
-- ✅ Bootstrap'te model cache'leme (her `run()` çağrısında yeniden yüklenmez)
-- ✅ `PackageHelper.build_model()` ile gerçek Novavision response mekanizması
+- Semantic embedding extraction from both images and text
+- CLIP versions: ViT-B-16, ViT-B-32, RN50 (runs on CPU, GPU not required)
+- Perception Encoder versions: PE-Core-B16-224, PE-Core-L14-336 (GPU/CUDA required)
+- L2 normalization (toggleable config)
+- Nested config structure with `restart=True`, matching the "Advance" toggle pattern in `ObjectTracking` one-to-one (`ConfigClipAdvance` -> True/False variants, see sections 5.1 and 9.3)
+- Model caching at bootstrap time (not reloaded on every `run()` call)
+- Real Novavision response mechanism via `PackageHelper.build_model()`
 
-### Desteklenen sınıflar / modeller / tipler
+### Supported classes / models / types
 
-| ID | İsim | Açıklama |
+| ID | Name | Description |
 |----|------|---------|
-| 1  | `ClipEmbedding` | CLIP tabanlı embedding executor'ü — `src/executors/ClipEmbedding.py` |
-| 2  | `PerceptionEncoderEmbedding` | Perception Encoder tabanlı embedding executor'ü (⚠ GPU zorunlu, doğrulanmamış) |
-| 3  | `PackageModel` | Paket genel yapı tanımı (configs, executor) |
-| 4  | `InputData` | Pydantic input modeli — Image veya serbest metin (Union) |
-| 5  | `EmbeddingModelLoader` | Model yükleme/cache/inference sınıfı (`utils/utils.py`) |
-| 6  | `ConfigClipVersion` / `ConfigPerceptionEncoderVersion` | Model varyantı seçimi |
-| 7  | `ConfigClipNormalize` / `ConfigPerceptionEncoderNormalize` | L2-normalizasyon aç/kapa |
-| 8  | `OutputEmbedding` | Float embedding vektörü çıktısı |
-| 9  | `OutputMeta` | Model ailesi/versiyonu/boyut bilgisi |
+| 1  | `ClipEmbedding` | CLIP-based embedding executor -- `src/executors/ClipEmbedding.py` |
+| 2  | `PerceptionEncoderEmbedding` | Perception Encoder-based embedding executor (GPU required, not verified) |
+| 3  | `PackageModel` | Overall package structure definition (configs, executor) |
+| 4  | `InputData` | Pydantic input model -- Image or free text (Union) |
+| 5  | `EmbeddingModelLoader` | Model loading/caching/inference class (`utils/utils.py`) |
+| 6  | `ConfigClipVersion` / `ConfigPerceptionEncoderVersion` | Model variant selection |
+| 7  | `ConfigClipNormalize` / `ConfigPerceptionEncoderNormalize` | L2 normalization on/off |
+| 8  | `OutputEmbedding` | Float embedding vector output |
+| 9  | `OutputMeta` | Model family/version/dimension info |
 
 ---
 
-## 2. Mimari ve Teknolojiler
+## 2. Architecture and Technologies
 
-### Teknoloji Stack'i
+### Technology stack
 - Framework: Python 3.9+
-- Model kütüphaneleri: `open_clip_torch` (CLIP, doğrulandı), Meta `perception_models` (Perception Encoder, ⚠ doğrulanmadı)
-- Görüntü işleme: Pillow, NumPy, OpenCV (`sdks.novavision` üzerinden)
-- Derin öğrenme: PyTorch (CPU veya CUDA)
-- API: `sdks.novavision` (Capsule, Executor, PackageHelper, Application, Image) — `ObjectTracking` paketiyle aynı SDK kullanımı
+- Model libraries: `open_clip_torch` (CLIP, verified), Meta `perception_models` (Perception Encoder, not verified)
+- Image processing: Pillow, NumPy, OpenCV (via `sdks.novavision`)
+- Deep learning: PyTorch (CPU or CUDA)
+- API: `sdks.novavision` (Capsule, Executor, PackageHelper, Application, Image) -- same SDK usage as the `ObjectTracking` package
 
-### Proje yapısı (tree formatında)
+### Project structure (tree format)
 
 ```
 cap-embedding-extraction/
 ├── LICENSE                              # MIT (DigiNova)
 ├── README.md
-├── DOCUMENTATION.md                     # (Bu dosya)
-├── setup.py                             # novavision.cap.embedding-extraction paket dizini
+├── DOCUMENTATION.md                     # (this file)
+├── setup.py                             # novavision.cap.embedding-extraction package dir
 ├── requirements.txt
 ├── .gitignore
 ├── __init__.py
 ├── apps/
-│   ├── inference.py                     # Gerçek platform HTTP client örneği (SDK ile)
-│   └── quick_test.py                    # SDK'sız hızlı yerel test (open_clip doğrudan)
-├── resources/                           # Örnek input görseller
+│   ├── inference.py                     # Real platform HTTP client example (with SDK)
+│   └── quick_test.py                    # Quick local test without SDK (open_clip directly)
+├── resources/                           # Sample input images
 ├── src/
 │   ├── __init__.py
 │   ├── executors/
 │   │   ├── ClipEmbedding.py             # CLIP executor
 │   │   └── PerceptionEncoderEmbedding.py # Perception Encoder executor
 │   ├── models/
-│   │   └── PackageModel.py              # Pydantic modeller
+│   │   └── PackageModel.py              # Pydantic models
 │   └── utils/
-│       ├── response.py                  # PackageHelper ile response inşası
-│       └── utils.py                     # EmbeddingModelLoader, config->cfg dönüşümü
+│       ├── response.py                  # Response construction via PackageHelper
+│       └── utils.py                     # EmbeddingModelLoader, config->cfg conversion
 ```
 
-Açıklamalar:
-- `ClipEmbedding.py` / `PerceptionEncoderEmbedding.py` — her biri kendi `Capsule` alt sınıfı; `bootstrap()` modeli bir kez yükler, `run()` her istek için embedding üretir. `ObjectTracking/src/executors/BoTSortTracking.py` ile aynı iskelet.
-- `PackageModel.py` — Pydantic modeller: her executor için ayrı Request/Response/Executor üçlüsü, `ObjectTracking`'deki gibi.
-- `utils/utils.py` — `EmbeddingModelLoader` sınıfı + `Application().get_param()` ile config okuyan `_build_clip_cfg`/`_build_perception_encoder_cfg` fonksiyonları (`_build_bot_sort_cfg` ile aynı desen).
-- `utils/response.py` — `PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs).build_model(context)` ile gerçek response nesnesini kurar.
+Notes:
+- `ClipEmbedding.py` / `PerceptionEncoderEmbedding.py` -- each is its own `Capsule` subclass; `bootstrap()` loads the model once, `run()` produces an embedding per request. Same skeleton as `ObjectTracking/src/executors/BoTSortTracking.py`.
+- `PackageModel.py` -- Pydantic models: a separate Request/Response/Executor triplet per executor, same as in `ObjectTracking`.
+- `utils/utils.py` -- the `EmbeddingModelLoader` class plus `_build_clip_cfg`/`_build_perception_encoder_cfg` functions that read config via `Application().get_param()` (same pattern as `_build_bot_sort_cfg`).
+- `utils/response.py` -- builds the real response object via `PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs).build_model(context)`.
 
 ---
 
-## 3. Executor'lar ve Çalışma Modları
+## 3. Executors and Operating Modes
 
-### `ClipEmbedding` (Tam path: `src/executors/ClipEmbedding.py`)
+### `ClipEmbedding` (full path: `src/executors/ClipEmbedding.py`)
 
-- Amaç: Görüntü veya metinden CLIP ile semantik embedding üretmek.
-- Kullanım senaryosu:
-  - ✅ Zero-shot görsel/metinsel benzerlik arama
-  - ✅ Detection-crop üzerinde kaba görünüm imzası çıkarma
-  - ✅ GPU'suz makinelerde (ör. yerel geliştirme ortamı) çalıştırılabilir tek embedding yöntemi
-- İşleyiş (numaralı adımlar):
-  1. `bootstrap(config)` → `Application().get_param()` ile `ConfigClipAdvance` okunur; `True` ise `ClipVersion`/`ClipNormalize`, `False` ise varsayılanlar kullanılır; `EmbeddingModelLoader` oluşturulur (normalize bootstrap-time'da loader'a sabitlenir)
-  2. `__init__` → `self.request.get_param("inputData")` ile SADECE input alınır (config DEĞİL — bkz. §9)
+- Purpose: produce a semantic embedding from an image or text using CLIP.
+- Use case:
+  - Zero-shot visual/text similarity search
+  - Extracting a coarse appearance signature on a detection crop
+  - The only embedding method that can run on GPU-less machines (e.g. local dev environment)
+- How it works (numbered steps):
+  1. `bootstrap(config)` -> reads `ConfigClipAdvance` via `Application().get_param()`; if `True`, uses `ClipVersion`/`ClipNormalize`, if `False`, uses defaults; builds `EmbeddingModelLoader` (normalize is fixed on the loader at bootstrap time)
+  2. `__init__` -> reads ONLY the input via `self.request.get_param("inputData")` (NOT config -- see section 9)
   3. `run()`:
-     1. Girdi görüntü ise `Image.get_frame(img=..., redis_db=self.redis_db)` ile frame alınır
-     2. Girdi metin ise doğrudan string olarak işlenir
-     3. `loader.embed_image()` / `loader.embed_text()` çağrılır (normalize parametresi verilmez, loader'ın bootstrap-time normalize'ı kullanılır)
-     4. `build_clip_response()` ile `PackageHelper` üzerinden gerçek Response inşa edilir
-- Temel metodlar: `__init__`, `bootstrap(config)` (staticmethod), `run(self)`
-- Dosya sonu: `if "__main__" == __name__: Executor(sys.argv[1]).run()`
+     1. If the input is an image, the frame is fetched via `Image.get_frame(img=..., redis_db=self.redis_db)`
+     2. If the input is text, it is processed directly as a string
+     3. `loader.embed_image()` / `loader.embed_text()` is called (no normalize argument is passed; the loader's bootstrap-time normalize is used)
+     4. The real Response is built via `PackageHelper` through `build_clip_response()`
+- Key methods: `__init__`, `bootstrap(config)` (staticmethod), `run(self)`
+- End of file: `if "__main__" == __name__: Executor(sys.argv[1]).run()`
 
-### `PerceptionEncoderEmbedding` (Tam path: `src/executors/PerceptionEncoderEmbedding.py`)
+### `PerceptionEncoderEmbedding` (full path: `src/executors/PerceptionEncoderEmbedding.py`)
 
-- Amaç: Meta Perception Encoder ile CLIP'e alternatif embedding üretmek.
-- ⚠ GPU/CUDA zorunlu; bu ortamda `perception_models` paketi kurulu olmadığından **uçtan uca doğrulanamadı**.
-- İşleyiş: `ClipEmbedding` ile birebir aynı akış, sadece `load_perception_encoder_loader()` çağrılır.
+- Purpose: produce an alternative embedding to CLIP using Meta's Perception Encoder.
+- GPU/CUDA is required; **not verified end-to-end** in this environment because the `perception_models` package is not installed.
+- How it works: identical flow to `ClipEmbedding`, only `load_perception_encoder_loader()` is called instead.
 
 ---
 
-## 4. Girdi (Input) Parametreleri
+## 4. Input Parameters
 
 ### 4.1 `InputData`
 ```python
@@ -128,12 +128,12 @@ class InputData(Input):
     class Config:
         title = "Data"
 ```
-- Tanım: Tek bir görüntü veya serbest metin (Union tipi)
-- Kullanıldığı executor'lar: ClipEmbedding ✅, PerceptionEncoderEmbedding ✅
+- Definition: a single image or free text (Union type)
+- Used by executors: ClipEmbedding, PerceptionEncoderEmbedding
 
 ---
 
-## 5. Konfigürasyon (Config) Parametreleri
+## 5. Configuration Parameters
 
 ### 5.1 `ConfigClipAdvance` / `ConfigPerceptionEncoderAdvance`
 ```python
@@ -158,9 +158,9 @@ class ConfigClipAdvance(Config):
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
     restart: Literal[True] = True
 ```
-- Tanım: `ObjectTracking`'deki `ConfigBoTSortAdvance` ile birebir aynı desen. `False` ise varsayılan değerler (ViT-B-16, normalize=True) kullanılır; `True` ise `configClipVersion`/`configClipNormalize` alt config'leri açılır.
-- `restart: Literal[True] = True` — model yükleme kararını etkileyen bir config değiştiğinde platformun `bootstrap()`'ı yeniden tetiklemesi için zorunlu.
-- Kullanıldığı executor'lar: ilgili executor ✅
+- Definition: same pattern as `ConfigBoTSortAdvance` in `ObjectTracking`, one-to-one. If `False`, default values are used (ViT-B-16, normalize=True); if `True`, the `configClipVersion`/`configClipNormalize` sub-configs are exposed.
+- `restart: Literal[True] = True` -- required so the platform re-triggers `bootstrap()` when a config that affects the model-loading decision changes.
+- Used by executors: the corresponding executor
 
 ### 5.2 `ConfigClipVersion` / `ConfigPerceptionEncoderVersion`
 ```python
@@ -170,9 +170,9 @@ class ConfigClipVersion(Config):
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
 ```
-- CLIP seçenekleri: `ViT-B-16` (varsayılan), `ViT-B-32`, `RN50`
-- Perception Encoder seçenekleri: `PE-Core-B16-224` (varsayılan), `PE-Core-L14-336`
-- Yalnızca `ConfigXXXAdvance=True` iken erişilebilir
+- CLIP options: `ViT-B-16` (default), `ViT-B-32`, `RN50`
+- Perception Encoder options: `PE-Core-B16-224` (default), `PE-Core-L14-336`
+- Only accessible when `ConfigXXXAdvance=True`
 
 ### 5.3 `ConfigClipNormalize` / `ConfigPerceptionEncoderNormalize`
 ```python
@@ -182,12 +182,12 @@ class ConfigClipNormalize(Config):
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
 ```
-- Varsayılan: `True` (kosinüs benzerliği için hazır)
-- Yalnızca `ConfigXXXAdvance=True` iken erişilebilir
+- Default: `True` (ready for cosine similarity)
+- Only accessible when `ConfigXXXAdvance=True`
 
 ---
 
-## 6. Çıktı (Output) Parametreleri
+## 6. Output Parameters
 
 ### 6.1 `OutputEmbedding`
 ```python
@@ -204,7 +204,7 @@ class OutputMeta(Output):
     value: dict
     type: Literal["object"] = "object"
 ```
-- Yapı örneği:
+- Example structure:
 ```json
 {
   "model_family": "CLIP",
@@ -213,13 +213,13 @@ class OutputMeta(Output):
   "embedding_dim": 512
 }
 ```
-- Neden gerekli: Farklı model versiyonlarıyla üretilmiş embedding'ler AYNI vektör uzayında değildir; bu meta bilgi, yanlış kıyaslamaları önlemek içindir.
+- Why it's needed: embeddings produced by different model versions do NOT live in the same vector space; this metadata exists to prevent incorrect comparisons.
 
 ---
 
-## 7. Veri Modelleri
+## 7. Data Models
 
-### Response inşası (ASCII akış, `ObjectTracking/src/utils/response.py` ile aynı desen)
+### Response construction (ASCII flow, same pattern as `ObjectTracking/src/utils/response.py`)
 
 ```
 [Executor.run()]
@@ -246,134 +246,140 @@ PackageConfigs(executor=...)
 PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs)
       |
       V
-package.build_model(context)  --> gerçek Novavision Response nesnesi
+package.build_model(context)  --> real Novavision Response object
 ```
 
-⚠ Önemli fark: Response, Pydantic modelin `.dict()`'ini doğrudan dönerek DEĞİL, `PackageHelper.build_model(context)` çağrısıyla inşa edilir — bu, `context` (executor `self`) üzerinden gerekli platform-seviyesi alanları (`redis_db`, request meta bilgisi vb.) otomatik doldurur.
+Important difference: the Response is NOT built by directly returning the Pydantic model's `.dict()` -- it's built via a `PackageHelper.build_model(context)` call, which automatically fills in the required platform-level fields (`redis_db`, request metadata, etc.) using `context` (the executor's `self`).
 
 ---
 
-## 8. Metodoloji ve Algoritmalar
+## 8. Methodology and Algorithms
 
-### 8.1 CLIP ile Embedding Çıkarımı (✅ Bu ortamda doğrulandı)
+### 8.1 Embedding Extraction with CLIP (verified in this environment)
 
-- Amaç: Görüntü veya metni `open_clip` üzerinden yüklenen CLIP modeliyle ortak vektör uzayına projekte etmek
+- Purpose: project an image or text into a shared vector space using a CLIP model loaded via `open_clip`
 
-- Adımlar:
-  1. `open_clip.create_model_and_transforms(model_name, pretrained="openai")` ile model + preprocess yüklenir
-  2. Görüntü: `preprocess(pil_image)` → `model.encode_image()`
-  3. Metin: `tokenizer([text])` → `model.encode_text()`
-  4. (Config'e göre) L2-normalizasyon: `features / features.norm(dim=-1, keepdim=True)`
+- Steps:
+  1. Load the model + preprocess pipeline via `open_clip.create_model_and_transforms(model_name, pretrained="openai")`
+  2. Image: `preprocess(pil_image)` -> `model.encode_image()`
+  3. Text: `tokenizer([text])` -> `model.encode_text()`
+  4. (Depending on config) L2 normalization: `features / features.norm(dim=-1, keepdim=True)`
 
-- Doğrulama notu: Bu ortamda `open_clip_torch` kurulup rastgele başlatılmış ViT-B-16 ağırlığıyla forward-pass test edildi: görüntü embedding'i `(512,)` boyutunda üretildi, normalize sonrası norm ≈ 1.0 doğrulandı (gerçek OpenAI ağırlıkları bu ortamda indirilemedi — izinli domain listesinde huggingface.co/openaipublic yok — ama mimari/API akışı doğru çalışıyor).
+- Verification note: in this environment, `open_clip_torch` was installed and the forward pass was tested with a randomly-initialized ViT-B-16: the image embedding was produced with shape `(512,)`, and the norm after normalization was confirmed to be approximately 1.0 (the real OpenAI weights could not be downloaded in this environment -- huggingface.co/openaipublic is not on the allowlisted domain list -- but the architecture/API flow is confirmed correct).
 
-- Avantajlar:
-  - ✅ CPU'da çalışır, GPU şart değil
-  - ✅ Zero-shot, ek eğitim gerektirmez
+- Advantages:
+  - Runs on CPU, GPU not required
+  - Zero-shot, no additional training required
 
-### 8.2 Perception Encoder ile Embedding Çıkarımı (⚠ Doğrulanmamış)
+### 8.2 Embedding Extraction with Perception Encoder (not verified)
 
-- Amaç: Meta'nın Perception Encoder modeliyle CLIP'e alternatif embedding üretmek
-- ⚠ Bu ortamda `perception_models` paketi kurulu olmadığından import ve API çağrıları çalıştırılıp test edilememiştir.
-- Gerçek ortamda önce:
+- Purpose: produce an alternative embedding to CLIP using Meta's Perception Encoder model
+- The `perception_models` package is not installed in this environment, so the import and API calls could not be run or tested.
+- Before using in a real environment:
   1. `pip install git+https://github.com/facebookresearch/perception_models.git`
-  2. `core.vision_encoder.pe` içindeki gerçek sınıf/fonksiyon isimlerini `src/utils/utils.py::_load_perception_encoder` içinde teyit edin
-  3. GPU/CUDA zorunluluğunu unutmayın — CPU'da çalışmaz
-- Öneri: Önce `ClipEmbedding` ile pipeline'ı uçtan uca doğrulayıp, GPU erişimi olan bir makinede Perception Encoder tarafını ayrıca test etmek daha güvenli bir yol.
+  2. Confirm the real class/function names inside `core.vision_encoder.pe` against `src/utils/utils.py::_load_perception_encoder`
+  3. Remember GPU/CUDA is required -- it does not run on CPU
+- Recommendation: verify the pipeline end-to-end with `ClipEmbedding` first, then separately test the Perception Encoder side on a machine with GPU access.
 
 ---
 
-## 9. Claude Code İncelemesi Sonrası Düzeltmeler
+## 9. Fixes Made After Claude Code Review
 
-Bu paket, Claude Code tarafından `cap-object-tracking` (ObjectTracking) referans
-koduyla karşılaştırmalı olarak incelendi. Üç bulgu ve yapılan düzeltmeler:
+This package was reviewed by Claude Code against the `cap-object-tracking` (ObjectTracking)
+reference code. Three findings and the fixes applied:
 
-### 9.1 (Kritik, düzeltildi) Config değerleri `request.get_param()` ile okunuyordu
+### 9.1 (Critical, fixed) Config values were being read via `request.get_param()`
 
-**Sorun:** İlk versiyonda `self.normalize = self.request.get_param("ClipNormalize")`
-satırı vardı. Referans kodda `request.get_param()` SADECE `inputs` altındaki
-isimler için kullanılıyor (`"inputImage"`, `"inputDetections"`); config değerleri
-ise her yerde ayrı bir mekanizmayla — `Application().get_param(config=config, name=...)`
-ile ve SADECE `bootstrap(config: dict)` içinde — okunuyor. Referans repoda
-`request.get_param()`'ın bir config adıyla çağrıldığı tek örnek yok.
+**Problem:** the first version had the line
+`self.normalize = self.request.get_param("ClipNormalize")`. In the reference code,
+`request.get_param()` is used ONLY for names under `inputs` (`"inputImage"`,
+`"inputDetections"`); config values are read everywhere through a separate
+mechanism -- `Application().get_param(config=config, name=...)` -- and ONLY
+inside `bootstrap(config: dict)`. There is not a single example in the
+reference repo of `request.get_param()` being called with a config name.
 
-**Risk:** Eğer gerçek SDK'da `get_param()` yalnızca `inputs` sözlüğünde arıyorsa,
-bu çağrı sessizce `None` döner ve "Normalize Embedding" toggle'ı UI'da görünür
-ama hiçbir zaman fiilen etkisi olmazdı.
+**Risk:** if the real SDK's `get_param()` only looks inside the `inputs` dict,
+this call would silently return `None`, and the "Normalize Embedding" toggle
+would appear in the UI but never actually have any effect.
 
-**Düzeltme:** `normalize` artık SADECE `bootstrap()` içinde, `_build_clip_cfg()`
-üzerinden `Application().get_param()` ile okunuyor ve `EmbeddingModelLoader`'a
-bootstrap-time'da sabitleniyor (`self.normalize` attribute'u). `run()` içinde
-`request.get_param()` artık yalnızca `"inputData"` (bir input) için çağrılıyor.
+**Fix:** `normalize` is now read ONLY inside `bootstrap()`, via
+`_build_clip_cfg()` using `Application().get_param()`, and is fixed on
+`EmbeddingModelLoader` at bootstrap time (the `self.normalize` attribute).
+Inside `run()`, `request.get_param()` is now only called for `"inputData"`
+(an input).
 
-### 9.2 (Orta, düzeltildi) `restart: Literal[True]` eksikti
+### 9.2 (Medium, fixed) `restart: Literal[True]` was missing
 
-Referansta bootstrap()'ta model/tracker yükleyen her config zinciri
-`restart: Literal[True] = True` taşıyan bir "Advance" sarmalayıcısıyla
-korunuyor (ör. `ConfigBoTSortAdvance`). İlk versiyonda `ConfigClipVersion`
-doğrudan config listesinde duruyordu, `restart` işareti yoktu — kullanıcı
-versiyonu değiştirse platform bunun `bootstrap()`'ı yeniden tetiklemesi
-gerektiğini bilemeyebilirdi.
+In the reference, every config chain that loads a model/tracker inside
+bootstrap() is protected by an "Advance" wrapper carrying
+`restart: Literal[True] = True` (e.g. `ConfigBoTSortAdvance`). In the first
+version, `ConfigClipVersion` sat directly in the config list with no `restart`
+flag -- if the user changed the version, the platform might not know it
+needed to re-trigger `bootstrap()`.
 
-### 9.3 (Düşük, düzeltildi) Config'ler Advance sarmalayıcısı olmadan üst seviyedeydi
+### 9.3 (Low, fixed) Configs sat at the top level without an Advance wrapper
 
-Referanstaki 5 executor'ın 5'i de TÜM ayarlanabilir parametrelerini
-(tek bir bool/enum olsa bile) bir `ConfigXXXAdvance` (`dependentDropdownlist`,
-`restart=True`) sarmalayıcısının arkasına koyuyor. İlk versiyonda
-`configClipVersion`/`configClipNormalize` bu sarmalayıcı olmadan doğrudan
-`ClipEmbeddingConfigs`'in üst seviyesindeydi.
+All 5 executors in the reference put ALL of their configurable parameters
+(even a single bool/enum) behind a `ConfigXXXAdvance`
+(`dependentDropdownlist`, `restart=True`) wrapper. In the first version,
+`configClipVersion`/`configClipNormalize` sat directly at the top level of
+`ClipEmbeddingConfigs` without this wrapper.
 
-**Düzeltme:** `ConfigClipAdvance`/`ConfigPerceptionEncoderAdvance` eklendi
-(True/False varyantları, `restart=True`), tutarlılık sağlandı ve bu aynı
-zamanda §9.2'deki restart eksikliğini de çözdü.
+**Fix:** `ConfigClipAdvance`/`ConfigPerceptionEncoderAdvance` were added
+(True/False variants, `restart=True`), bringing consistency and also fixing
+the missing-restart issue from section 9.2 at the same time.
 
-### 9.4 Küçük not (temizlendi)
+### 9.4 Minor note (cleaned up)
 
-`load_clip_loader`/`load_perception_encoder_loader` fonksiyonları `cfg.normalize`
-hesaplanıp da `EmbeddingModelLoader`'a hiç geçirilmiyordu (ölü kod). Artık
-`normalize=cfg.normalize` olarak loader'a aktarılıyor ve `embed_image`/`embed_text`
-içinde parametre verilmezse bu değer kullanılıyor. Bu davranış, `sdks` modülünü
-mock'layarak izole test edildi: `normalize=False` → norm≈22.3 (normalize edilmemiş),
-`normalize=True` → norm=1.0 (doğrulandı).
+`load_clip_loader`/`load_perception_encoder_loader` computed `cfg.normalize`
+but never passed it to `EmbeddingModelLoader` (dead code). Now
+`normalize=cfg.normalize` is passed to the loader and is used in
+`embed_image`/`embed_text` whenever no parameter is given at call time. This
+behavior was verified in isolation by mocking the `sdks` module:
+`normalize=False` -> norm ≈ 22.3 (not normalized), `normalize=True` -> norm =
+1.0 (confirmed).
 
-### Hâlâ doğrulanamayan noktalar
+### Points still unverified
 
-- `field="option"` (bool/enum config'ler için) tipi referansta doğrulanmış bir
-  widget, ama Advance sarmalayıcısı OLMADAN kullanılan bir örneği referans kodda
-  yoktu — artık bu paket de Advance sarmalayıcısı kullandığı için bu endişe
-  ortadan kalktı.
-- `isinstance(self.input_data, dict) and self.input_data.get("type") == "Image"`
-  kontrolü, `get_param()`'ın input'lar için ham dict/list döndürdüğü varsayımına
-  dayanıyor (referanstaki `input_detections[0]["imgUID"]` kullanımıyla tutarlı)
-  — düşük risk, ama gerçek SDK ile ilk testte teyit edilmeli.
-- Perception Encoder tarafı hâlâ doğrulanamadı (bkz. §8.2).
+- The `field="option"` type (for bool/enum configs) is a widget type
+  confirmed in the reference, but the reference code had no example of it
+  being used WITHOUT an Advance wrapper -- this concern is now moot since
+  this package also uses an Advance wrapper.
+- The `isinstance(self.input_data, dict) and self.input_data.get("type") ==
+  "Image"` check relies on the assumption that `get_param()` returns a raw
+  dict/list for inputs (consistent with the reference's
+  `input_detections[0]["imgUID"]` usage) -- low risk, but should be
+  confirmed on the first real SDK test.
+- The Perception Encoder side is still unverified (see section 8.2).
 
 ---
 
-## 10. Gerçek Ortam Testi Bulgusu (QuickGELU)
+## 10. Real-Environment Test Finding (QuickGELU)
 
-İlk gerçek çalıştırmada (senin makinende, Claude Code üzerinden) şu uyarı
-gözlemlendi: `"a red buoy on water"` metni için `ViT-B-16` ile 512-D embedding
-başarıyla üretildi, ancak model config'i ile OpenAI'nin pretrained
-ağırlıkları arasında bir "QuickGELU mismatch" uyarısı çıktı.
+On the first real run (on your machine, via Claude Code), the following
+warning was observed: a 512-D embedding was successfully produced for the
+text `"a red buoy on water"` with `ViT-B-16`, but a "QuickGELU mismatch"
+warning appeared between the model config and OpenAI's pretrained weights.
 
-**Kök neden (doğrulandı):** `open_clip.get_pretrained_cfg("ViT-B-16", "openai")`
-config'inde `quick_gelu: True` alanı var — yani OpenAI'nin orijinal CLIP
-ağırlıkları (`ViT-B-16`, `ViT-B-32`, `RN50` — üçü de kontrol edildi) `QuickGELU`
-aktivasyonuyla eğitilmiş. `create_model_and_transforms()` çağrısında
-`force_quick_gelu=True` verilmezse model varsayılan (standart) `nn.GELU` ile
-kurulur ve ağırlıklar yanlış aktivasyon fonksiyonuyla yüklenmiş olur.
+**Root cause (verified):** `open_clip.get_pretrained_cfg("ViT-B-16",
+"openai")`'s config has a `quick_gelu: True` field -- meaning OpenAI's
+original CLIP weights (`ViT-B-16`, `ViT-B-32`, `RN50` -- all three checked)
+were trained with QuickGELU activation. Without `force_quick_gelu=True` in
+the `create_model_and_transforms()` call, the model is built with the
+default (standard) `nn.GELU`, and the weights end up loaded with the wrong
+activation function.
 
-**Risk:** Bu "zararsız" bir uyarı değil — forward pass hatasız çalışır ve
-bir embedding üretir, ama üretilen embedding eğitim zamanındaki aktivasyon
-fonksiyonundan sapar. Yani sonuç sessizce hatalı olabilir (çalışıyor
-görünür ama kalitesi düşük olabilir).
+**Risk:** this is not a "harmless" warning -- the forward pass runs without
+error and produces an embedding, but the resulting embedding drifts from
+the activation function used at training time. In other words, the result
+can be silently wrong (it appears to work, but quality may be degraded).
 
-**Doğrulama:** Bu ortamda katman tipi doğrudan incelendi:
+**Verification:** the layer type was directly inspected in this environment:
 ```python
-force_quick_gelu=False (varsayılan) -> nn.GELU
-force_quick_gelu=True               -> nn.QuickGELU
+force_quick_gelu=False (default) -> nn.GELU
+force_quick_gelu=True            -> nn.QuickGELU
 ```
 
-**Düzeltme:** `src/utils/utils.py::EmbeddingModelLoader._load_clip()` ve
-`apps/quick_test.py` içinde `force_quick_gelu=True` eklendi.
+**Fix:** `force_quick_gelu=True` was added in
+`src/utils/utils.py::EmbeddingModelLoader._load_clip()` and in
+`apps/quick_test.py`.

@@ -1,8 +1,8 @@
 """Executor for Perception Encoder-based embedding extraction in NovaVision pipeline.
 
-⚠ GPU/CUDA zorunludur. Bu ortamda `perception_models` paketi kurulu
-olmadığından uçtan uca doğrulanamamıştır -- bkz. src/utils/utils.py
-docstring'i ve DOCUMENTATION.md §8.2.
+GPU/CUDA is required. Not verified end-to-end in this environment because
+the `perception_models` package is not installed -- see the src/utils/utils.py
+docstring and DOCUMENTATION.md section 8.2.
 """
 
 import os

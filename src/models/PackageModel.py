@@ -7,8 +7,8 @@ from sdks.novavision.src.base.model import Package, Configs, Outputs, Inputs, \
 
 class InputData(Input):
     """
-    CLIP / Perception Encoder ortak girdisi: tek bir görüntü VEYA serbest metin.
-    Roboflow'un `data` (Union[image, string]) sözleşmesiyle aynı mantık.
+    Shared input for CLIP / Perception Encoder: a single image OR free text.
+    Same contract as Roboflow's `data` field (Union[image, string]).
     """
     name: Literal["inputData"] = "inputData"
     value: Union[Image, str]
@@ -36,9 +36,9 @@ class OutputEmbedding(Output):
 
 class OutputMeta(Output):
     """
-    Embedding'in hangi model ailesi/versiyonuyla üretildiğine dair iz bilgisi.
-    Farklı model versiyonlarıyla üretilen embedding'lerin yanlışlıkla aynı
-    uzaymış gibi kıyaslanmasını önlemek için tutulur.
+    Traceability info about which model family/version produced the
+    embedding. Kept to prevent accidentally comparing embeddings that
+    were produced by different model versions (different vector spaces).
     """
     name: Literal["outputMeta"] = "outputMeta"
     value: dict
@@ -54,7 +54,7 @@ class OutputMeta(Output):
 
 
 class ConfigClipVersion(Config):
-    """CLIP backbone/çözünürlük varyantı."""
+    """CLIP backbone / resolution variant."""
     name: Literal["clipVersion"] = "ClipVersion"
     value: Literal["ViT-B-16", "ViT-B-32", "RN50"] = "ViT-B-16"
     type: Literal["string"] = "string"
@@ -68,7 +68,7 @@ class ConfigClipVersion(Config):
 
 
 class ConfigClipNormalize(Config):
-    """Çıktı embedding'inin L2-normalize edilip edilmeyeceği."""
+    """Whether the output embedding should be L2-normalized."""
     name: Literal["clipNormalize"] = "ClipNormalize"
     value: bool = True
     type: Literal["bool"] = "bool"
@@ -106,9 +106,9 @@ class ConfigClipAdvanceFalse(Config):
 class ConfigClipAdvance(Config):
     """
     Enable advanced settings for CLIP embedding (version, normalize).
-    `ObjectTracking`'deki ConfigBoTSortAdvance ile aynı desen: model
-    yükleme kararını etkileyen config'ler bootstrap()'ı yeniden tetiklemesi
-    gerektiği için restart=True taşır.
+    Same pattern as ConfigBoTSortAdvance in `ObjectTracking`: configs that
+    affect the model-loading decision must carry restart=True so the
+    platform knows to re-trigger bootstrap().
     """
     name: Literal["ConfigClipAdvance"] = "ConfigClipAdvance"
     value: Union[ConfigClipAdvanceTrue, ConfigClipAdvanceFalse]
@@ -168,13 +168,13 @@ class ClipEmbeddingExecutor(Config):
 # ==========================================
 # 2. Perception Encoder Executor Configurations
 # ==========================================
-# ⚠ GPU/CUDA zorunludur (Roboflow'un roboflow_core/perception_encoder@v1
-#   bloğu da aynı kısıtı belgeliyor). Bu ortamda `perception_models`
-#   paketi kurulu olmadığından uçtan uca doğrulanamamıştır.
+# GPU/CUDA is required (Roboflow's own roboflow_core/perception_encoder@v1
+# block documents the same constraint). Not verified end-to-end in this
+# environment because the `perception_models` package is not installed.
 
 
 class ConfigPerceptionEncoderVersion(Config):
-    """Perception Encoder backbone/çözünürlük varyantı."""
+    """Perception Encoder backbone / resolution variant."""
     name: Literal["perceptionEncoderVersion"] = "PerceptionEncoderVersion"
     value: Literal["PE-Core-B16-224", "PE-Core-L14-336"] = "PE-Core-B16-224"
     type: Literal["string"] = "string"
