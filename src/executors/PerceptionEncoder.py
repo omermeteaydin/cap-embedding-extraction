@@ -19,7 +19,7 @@ from capsules.EmbeddingExtraction.src.utils.response import build_perception_enc
 from capsules.EmbeddingExtraction.src.utils.utils import load_perception_encoder_loader
 
 
-class PerceptionEncoderEmbedding(Capsule):
+class PerceptionEncoder(Capsule):
     def __init__(self, request, bootstrap):
         super().__init__(request, bootstrap)
         self.request.model = PackageModel(**(self.request.data))

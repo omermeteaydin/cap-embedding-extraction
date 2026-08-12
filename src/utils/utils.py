@@ -1,9 +1,10 @@
 """
 utils.py
 
-CLIP / Perception Encoder model loading and embedding extraction helpers.
-Written in the same spirit as the appearance-extractor pattern in
-`BoTSORTTracker/reid.py` (cropping, batching, normalization, caching).
+CLIP / Perception Encoder model loading, embedding extraction, and
+comparison helpers. Written in the same spirit as the appearance-extractor
+pattern in `BoTSORTTracker/reid.py` (cropping, batching, normalization,
+caching).
 
 Notes:
 - The CLIP path is fully functional via `open_clip_torch`
@@ -15,6 +16,7 @@ Notes:
 """
 
 from types import SimpleNamespace
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -33,22 +35,48 @@ CLIP_VERSION_TO_OPEN_CLIP = {
 PERCEPTION_ENCODER_VERSIONS = {"PE-Core-B16-224", "PE-Core-L14-336"}
 
 
-def _build_clip_cfg(config):
-    """Same pattern as `_build_bot_sort_cfg`: reads the ConfigClipAdvance
-    toggle via Application().get_param(); if True, reads the sub-configs,
-    if False, uses defaults. Config values are read ONLY here, inside
-    bootstrap() -- request.get_param() is used only for inputs."""
+def _build_clip_generate_cfg(config):
+    """Same pattern as `_build_bot_sort_cfg`: reads the
+    ConfigClipGenerateAdvance toggle via Application().get_param(); if
+    True, reads the sub-configs, if False, uses defaults. Config values
+    are read ONLY here, inside bootstrap() -- request.get_param() is
+    used only for inputs."""
     application = Application()
-    advance = application.get_param(config=config, name="ConfigClipAdvance")
+    advance = application.get_param(config=config, name="ConfigClipGenerateAdvance")
 
     if advance == "True":
-        version = application.get_param(config=config, name="ClipVersion")
-        normalize = application.get_param(config=config, name="ClipNormalize")
+        version = application.get_param(config=config, name="ClipGenerateVersion")
+        normalize = application.get_param(config=config, name="ClipGenerateNormalize")
         return SimpleNamespace(
             model_family="CLIP",
             model_version=version or "ViT-B-16",
             normalize=normalize if normalize is not None else True,
             device="cpu",  # GPU is not required for CLIP; CUDA is used automatically if available
+        )
+
+    return SimpleNamespace(
+        model_family="CLIP",
+        model_version="ViT-B-16",
+        normalize=True,
+        device="cpu",
+    )
+
+
+def _build_clip_comparison_cfg(config):
+    """Same pattern as `_build_clip_generate_cfg`, but for the
+    ClipComparison executor (no `normalize` toggle -- similarity scores
+    are always computed on normalized embeddings, see
+    EmbeddingModelLoader.compare_image_to_texts)."""
+    application = Application()
+    advance = application.get_param(config=config, name="ConfigClipComparisonAdvance")
+
+    if advance == "True":
+        version = application.get_param(config=config, name="ClipComparisonVersion")
+        return SimpleNamespace(
+            model_family="CLIP",
+            model_version=version or "ViT-B-16",
+            normalize=True,
+            device="cpu",
         )
 
     return SimpleNamespace(
@@ -107,7 +135,7 @@ class EmbeddingModelLoader:
     `normalize` is read from config at bootstrap-time and fixed here --
     it is not re-read from config at runtime (inside `run()`), because
     the reference SDK pattern only reads configs inside bootstrap() via
-    Application().get_param() (see utils.py:_build_clip_cfg)."""
+    Application().get_param() (see utils.py:_build_clip_generate_cfg)."""
 
     def __init__(self, model_family: str, model_version: str, normalize: bool = True,
                  device: str = None):
@@ -183,6 +211,39 @@ class EmbeddingModelLoader:
         features = self.model.encode_text(tokens)
         return self._postprocess(features, self.normalize if normalize is None else normalize)
 
+    @torch.no_grad()
+    def compare_image_to_texts(self, image_array: np.ndarray, texts: List[str]) -> Dict[str, float]:
+        """
+        Zero-shot classification: embeds `image_array` once, embeds each
+        string in `texts`, and returns the cosine similarity between the
+        image and each text label. Mirrors Roboflow's
+        `roboflow_core/clip_comparison@v2` block (a single image compared
+        against a list of class labels).
+
+        Both image and text embeddings are always L2-normalized here
+        (regardless of the `self.normalize` bootstrap setting) because
+        the cosine-similarity formula requires unit vectors to reduce to
+        a plain dot product; this keeps the comparison mathematically
+        correct even if a caller instantiates the loader with
+        normalize=False for some other purpose.
+        """
+        if not texts:
+            return {}
+
+        pil_image = PILImage.fromarray(image_array.astype("uint8"), "RGB")
+        image_tensor = self.preprocess(pil_image).unsqueeze(0).to(self.device)
+        image_features = self.model.encode_image(image_tensor)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+        text_tokens = self.tokenizer(texts).to(self.device)
+        text_features = self.model.encode_text(text_tokens)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+        # Cosine similarity == dot product once both sides are unit-normalized.
+        similarities = (image_features @ text_features.T).squeeze(0)
+        scores = similarities.detach().cpu().numpy().tolist()
+        return dict(zip(texts, scores))
+
     @staticmethod
     def _postprocess(features: torch.Tensor, normalize: bool) -> np.ndarray:
         if normalize:
@@ -190,9 +251,19 @@ class EmbeddingModelLoader:
         return features.squeeze(0).detach().cpu().numpy()
 
 
-def load_clip_loader(config) -> EmbeddingModelLoader:
+def load_clip_generate_loader(config) -> EmbeddingModelLoader:
     """Same pattern as `load_bot_sort_tracker`: builds a CLIP loader from config."""
-    cfg = _build_clip_cfg(config) if isinstance(config, dict) else config
+    cfg = _build_clip_generate_cfg(config) if isinstance(config, dict) else config
+    return EmbeddingModelLoader(
+        model_family=cfg.model_family,
+        model_version=cfg.model_version,
+        normalize=cfg.normalize,
+        device=cfg.device,
+    )
+
+
+def load_clip_comparison_loader(config) -> EmbeddingModelLoader:
+    cfg = _build_clip_comparison_cfg(config) if isinstance(config, dict) else config
     return EmbeddingModelLoader(
         model_family=cfg.model_family,
         model_version=cfg.model_version,

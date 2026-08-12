@@ -2,38 +2,67 @@
 
 ## 1. Overview
 
-### Purpose of the package
+### What this package does
 
-The EmbeddingExtraction package is a capsule that produces semantic embedding vectors from images and/or free text using **CLIP** or **Perception Encoder** models. It is aligned with the real conventions of the `cap-object-tracking` (ObjectTracking) package (PackageModel/PackageHelper/Application().get_param()/Capsule-Executor flow). This package:
+The EmbeddingExtraction package generates semantic embedding vectors from
+images and/or free text using **CLIP** or **Perception Encoder** models,
+and provides a CLIP-based zero-shot comparison mode. It exposes **three
+executors**, following the same one-task-per-executor pattern used in
+`ObjectTracking` (SORT / OC-SORT / ByteTrack / BoT-SORT):
 
-- Accepts a single image or text
-- Exposes two separate executors: `ClipEmbedding` and `PerceptionEncoderEmbedding`
-- Returns metadata alongside the output indicating which model/version produced it
-- Applies optional L2 normalization
+- **ClipGenerate** — image or text -> a single embedding vector
+- **ClipComparison** — image + a list of text labels -> a similarity score per label (zero-shot classification)
+- **PerceptionEncoder** — image or text -> a single embedding vector (Generate only; no comparison mode, see rationale below)
+
+### Why Generate and Comparison are separate executors
+
+Generate and Comparison have fundamentally different input/output
+contracts:
+
+| | Input | Output |
+|---|---|---|
+| Generate | 1 image OR 1 text | 1 embedding vector |
+| Comparison | 1 image + N text labels | N similarity scores |
+
+Rather than cramming both shapes into a single Request/Response via a
+config-driven "mode" switch, each is exposed as its own Task option in
+`ConfigExecutor` -- mirroring how `ObjectTracking` exposes SORT, OC-SORT,
+ByteTrack, and BoT-SORT as four separate executors inside one package.
+This is a proven, platform-supported pattern.
+
+### Why Perception Encoder has no Comparison mode
+
+Roboflow does not currently offer a dedicated Perception Encoder
+comparison block (only a `Perception Encoder Embedding Model` block for
+generation, plus the model-agnostic `Cosine Similarity` block for
+comparing any two embeddings). This package mirrors that: Perception
+Encoder only exposes a Generate-equivalent executor.
 
 ### Key features
 
-- Semantic embedding extraction from both images and text
-- CLIP versions: ViT-B-16, ViT-B-32, RN50 (runs on CPU, GPU not required)
-- Perception Encoder versions: PE-Core-B16-224, PE-Core-L14-336 (GPU/CUDA required)
-- L2 normalization (toggleable config)
-- Nested config structure with `restart=True`, matching the "Advance" toggle pattern in `ObjectTracking` one-to-one (`ConfigClipAdvance` -> True/False variants, see sections 5.1 and 9.3)
-- Model caching at bootstrap time (not reloaded on every `run()` call)
-- Real Novavision response mechanism via `PackageHelper.build_model()`
+- ✅ Image and text embedding generation (CLIP, Perception Encoder)
+- ✅ CLIP versions: ViT-B-16, ViT-B-32, RN50 (run on CPU, GPU not required)
+- ✅ Perception Encoder versions: PE-Core-B16-224, PE-Core-L14-336 (⚠ GPU/CUDA required)
+- ✅ Zero-shot image-to-text-labels comparison (ClipComparison), mirrors Roboflow's `roboflow_core/clip_comparison@v2`
+- ✅ L2-normalization toggle for Generate executors
+- ✅ Advance-toggle config pattern consistent with `ObjectTracking` (`restart=True` where the config affects model loading)
+- ✅ Model caching at bootstrap-time (not reloaded on every `run()` call)
+- ✅ Real Response construction via `PackageHelper.build_model()`
 
 ### Supported classes / models / types
 
 | ID | Name | Description |
-|----|------|---------|
-| 1  | `ClipEmbedding` | CLIP-based embedding executor -- `src/executors/ClipEmbedding.py` |
-| 2  | `PerceptionEncoderEmbedding` | Perception Encoder-based embedding executor (GPU required, not verified) |
-| 3  | `PackageModel` | Overall package structure definition (configs, executor) |
-| 4  | `InputData` | Pydantic input model -- Image or free text (Union) |
-| 5  | `EmbeddingModelLoader` | Model loading/caching/inference class (`utils/utils.py`) |
-| 6  | `ConfigClipVersion` / `ConfigPerceptionEncoderVersion` | Model variant selection |
-| 7  | `ConfigClipNormalize` / `ConfigPerceptionEncoderNormalize` | L2 normalization on/off |
-| 8  | `OutputEmbedding` | Float embedding vector output |
-| 9  | `OutputMeta` | Model family/version/dimension info |
+|----|------|-------------|
+| 1  | `ClipGenerate` | CLIP embedding generation executor — `src/executors/ClipGenerate.py` |
+| 2  | `ClipComparison` | CLIP zero-shot image/text-labels comparison executor — `src/executors/ClipComparison.py` |
+| 3  | `PerceptionEncoder` | Perception Encoder embedding generation executor (⚠ GPU required, unverified) |
+| 4  | `PackageModel` | Top-level package structure (configs, executor) |
+| 5  | `InputData` | Pydantic input model for Generate executors — Image or free text (Union) |
+| 6  | `InputComparisonImage` / `InputComparisonClasses` | Pydantic input models for ClipComparison — image and text-label list |
+| 7  | `EmbeddingModelLoader` | Model loading / caching / inference class (`utils/utils.py`) — also implements `compare_image_to_texts` |
+| 8  | `OutputEmbedding` | Float embedding vector output (Generate executors) |
+| 9  | `OutputSimilarities` | Per-label similarity score output (ClipComparison) |
+| 10 | `OutputMeta` | Model family / version / traceability info |
 
 ---
 
@@ -41,12 +70,12 @@ The EmbeddingExtraction package is a capsule that produces semantic embedding ve
 
 ### Technology stack
 - Framework: Python 3.9+
-- Model libraries: `open_clip_torch` (CLIP, verified), Meta `perception_models` (Perception Encoder, not verified)
-- Image processing: Pillow, NumPy, OpenCV (via `sdks.novavision`)
+- Model libraries: `open_clip_torch` (CLIP, verified), Meta `perception_models` (Perception Encoder, ⚠ unverified)
+- Image handling: Pillow, NumPy, OpenCV (via `sdks.novavision`)
 - Deep learning: PyTorch (CPU or CUDA)
-- API: `sdks.novavision` (Capsule, Executor, PackageHelper, Application, Image) -- same SDK usage as the `ObjectTracking` package
+- API: `sdks.novavision` (Capsule, Executor, PackageHelper, Application, Image) — same SDK usage as `ObjectTracking`
 
-### Project structure (tree format)
+### Project structure (tree)
 
 ```
 cap-embedding-extraction/
@@ -58,60 +87,60 @@ cap-embedding-extraction/
 ├── .gitignore
 ├── __init__.py
 ├── apps/
-│   ├── inference.py                     # Real platform HTTP client example (with SDK)
-│   └── quick_test.py                    # Quick local test without SDK (open_clip directly)
-├── resources/                           # Sample input images
+│   ├── inference.py                     # Real platform HTTP client examples (SDK-based)
+│   └── quick_test.py                    # SDK-free local sanity check (raw open_clip)
+├── resources/                           # Example input images
 ├── src/
 │   ├── __init__.py
 │   ├── executors/
-│   │   ├── ClipEmbedding.py             # CLIP executor
-│   │   └── PerceptionEncoderEmbedding.py # Perception Encoder executor
+│   │   ├── ClipGenerate.py              # CLIP embedding generation executor
+│   │   ├── ClipComparison.py            # CLIP zero-shot comparison executor
+│   │   └── PerceptionEncoder.py         # Perception Encoder generation executor
 │   ├── models/
 │   │   └── PackageModel.py              # Pydantic models
 │   └── utils/
 │       ├── response.py                  # Response construction via PackageHelper
-│       └── utils.py                     # EmbeddingModelLoader, config->cfg conversion
+│       └── utils.py                     # EmbeddingModelLoader, config -> cfg resolution
 ```
-
-Notes:
-- `ClipEmbedding.py` / `PerceptionEncoderEmbedding.py` -- each is its own `Capsule` subclass; `bootstrap()` loads the model once, `run()` produces an embedding per request. Same skeleton as `ObjectTracking/src/executors/BoTSortTracking.py`.
-- `PackageModel.py` -- Pydantic models: a separate Request/Response/Executor triplet per executor, same as in `ObjectTracking`.
-- `utils/utils.py` -- the `EmbeddingModelLoader` class plus `_build_clip_cfg`/`_build_perception_encoder_cfg` functions that read config via `Application().get_param()` (same pattern as `_build_bot_sort_cfg`).
-- `utils/response.py` -- builds the real response object via `PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs).build_model(context)`.
 
 ---
 
-## 3. Executors and Operating Modes
+## 3. Executors and Modes of Operation
 
-### `ClipEmbedding` (full path: `src/executors/ClipEmbedding.py`)
+### `ClipGenerate` (`src/executors/ClipGenerate.py`)
 
 - Purpose: produce a semantic embedding from an image or text using CLIP.
-- Use case:
-  - Zero-shot visual/text similarity search
-  - Extracting a coarse appearance signature on a detection crop
-  - The only embedding method that can run on GPU-less machines (e.g. local dev environment)
-- How it works (numbered steps):
-  1. `bootstrap(config)` -> reads `ConfigClipAdvance` via `Application().get_param()`; if `True`, uses `ClipVersion`/`ClipNormalize`, if `False`, uses defaults; builds `EmbeddingModelLoader` (normalize is fixed on the loader at bootstrap time)
-  2. `__init__` -> reads ONLY the input via `self.request.get_param("inputData")` (NOT config -- see section 9)
-  3. `run()`:
-     1. If the input is an image, the frame is fetched via `Image.get_frame(img=..., redis_db=self.redis_db)`
-     2. If the input is text, it is processed directly as a string
-     3. `loader.embed_image()` / `loader.embed_text()` is called (no normalize argument is passed; the loader's bootstrap-time normalize is used)
-     4. The real Response is built via `PackageHelper` through `build_clip_response()`
-- Key methods: `__init__`, `bootstrap(config)` (staticmethod), `run(self)`
-- End of file: `if "__main__" == __name__: Executor(sys.argv[1]).run()`
+- Use cases:
+  - ✅ Zero-shot visual/textual similarity search
+  - ✅ Run on a detection crop to produce a coarse appearance signature
+  - ✅ Only embedding method usable without a GPU
+- Flow:
+  1. `bootstrap(config)` reads `ConfigClipGenerateAdvance` via `Application().get_param()`; if `True`, reads `ClipGenerateVersion`/`ClipGenerateNormalize`, else uses defaults; builds `EmbeddingModelLoader`
+  2. `__init__` reads `inputData` via `self.request.get_param("inputData")`
+  3. `run()`: if input is an image, `Image.get_frame(...)` then `loader.embed_image()`; if text, `loader.embed_text()`; response built via `build_clip_generate_response()`
 
-### `PerceptionEncoderEmbedding` (full path: `src/executors/PerceptionEncoderEmbedding.py`)
+### `ClipComparison` (`src/executors/ClipComparison.py`)
 
-- Purpose: produce an alternative embedding to CLIP using Meta's Perception Encoder.
-- GPU/CUDA is required; **not verified end-to-end** in this environment because the `perception_models` package is not installed.
-- How it works: identical flow to `ClipEmbedding`, only `load_perception_encoder_loader()` is called instead.
+- Purpose: zero-shot classification — compare one image against a list of
+  free-text labels and return a similarity score per label.
+- Use cases:
+  - ✅ Classify an image without training a dedicated model (e.g. "is this NSFW", "what type of vessel is this")
+- Flow:
+  1. `bootstrap(config)` reads `ConfigClipComparisonAdvance` (same Advance-toggle pattern, no `normalize` toggle — comparison always uses normalized embeddings)
+  2. `__init__` reads `inputImage` and `inputClasses` separately (two inputs, same pattern as `BoTSortTracking`'s `inputImage`/`inputDetections`)
+  3. `run()`: `Image.get_frame(...)` then `loader.compare_image_to_texts(image_array, classes)` — embeds the image once, embeds each label, returns cosine similarity per label as a dict
+
+### `PerceptionEncoder` (`src/executors/PerceptionEncoder.py`)
+
+- Purpose: produce a semantic embedding from an image or text using Meta's Perception Encoder.
+- ⚠ GPU/CUDA required; `perception_models` package not installed in this environment, so this path is **unverified end-to-end**.
+- Flow: identical to `ClipGenerate`, calling `load_perception_encoder_loader()` instead.
 
 ---
 
 ## 4. Input Parameters
 
-### 4.1 `InputData`
+### 4.1 `InputData` (ClipGenerate / PerceptionEncoder)
 ```python
 class InputData(Input):
     name: Literal["inputData"] = "inputData"
@@ -124,72 +153,85 @@ class InputData(Input):
         if isinstance(value, Image):
             return "object"
         return "string"
-
-    class Config:
-        title = "Data"
 ```
-- Definition: a single image or free text (Union type)
-- Used by executors: ClipEmbedding, PerceptionEncoderEmbedding
+- A single image OR free text (Union type).
+- Used by: ClipGenerate ✅, PerceptionEncoder ✅
+
+### 4.2 `InputComparisonImage` / `InputComparisonClasses` (ClipComparison)
+```python
+class InputComparisonImage(Input):
+    name: Literal["inputImage"] = "inputImage"
+    value: Image
+    type: Literal["object"] = "object"
+
+class InputComparisonClasses(Input):
+    name: Literal["inputClasses"] = "inputClasses"
+    value: List[str] = Field(default_factory=list)
+    type: Literal["list"] = "list"
+```
+- `inputImage`: the image to classify.
+- `inputClasses`: free-text labels to compare against, e.g. `["boat", "buoy", "obstacle"]`.
+- Used by: ClipComparison ✅
 
 ---
 
 ## 5. Configuration Parameters
 
-### 5.1 `ConfigClipAdvance` / `ConfigPerceptionEncoderAdvance`
+### 5.1 `ConfigClipGenerateAdvance` / `ConfigClipComparisonAdvance` / `ConfigPerceptionEncoderAdvance`
+
+Same nested True/False pattern as `ConfigBoTSortAdvance` in `ObjectTracking`:
 ```python
-class ConfigClipAdvanceTrue(Config):
+class ConfigClipGenerateAdvanceTrue(Config):
     name: Literal["True"] = "True"
     value: Literal["True"] = "True"
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
-    configClipVersion: ConfigClipVersion
-    configClipNormalize: ConfigClipNormalize
+    configClipGenerateVersion: ConfigClipGenerateVersion
+    configClipGenerateNormalize: ConfigClipGenerateNormalize
 
-class ConfigClipAdvanceFalse(Config):
-    name: Literal["False"] = "False"
-    value: Literal["False"] = "False"
-    type: Literal["bool"] = "bool"
-    field: Literal["option"] = "option"
-
-class ConfigClipAdvance(Config):
-    name: Literal["ConfigClipAdvance"] = "ConfigClipAdvance"
-    value: Union[ConfigClipAdvanceTrue, ConfigClipAdvanceFalse]
+class ConfigClipGenerateAdvance(Config):
+    name: Literal["ConfigClipGenerateAdvance"] = "ConfigClipGenerateAdvance"
+    value: Union[ConfigClipGenerateAdvanceTrue, ConfigClipGenerateAdvanceFalse]
     type: Literal["object"] = "object"
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
     restart: Literal[True] = True
 ```
-- Definition: same pattern as `ConfigBoTSortAdvance` in `ObjectTracking`, one-to-one. If `False`, default values are used (ViT-B-16, normalize=True); if `True`, the `configClipVersion`/`configClipNormalize` sub-configs are exposed.
-- `restart: Literal[True] = True` -- required so the platform re-triggers `bootstrap()` when a config that affects the model-loading decision changes.
-- Used by executors: the corresponding executor
+- `restart: Literal[True] = True` is mandatory here because the sub-configs
+  (model version) affect what `bootstrap()` loads.
+- `ConfigClipComparisonAdvance` follows the exact same pattern but only
+  nests `configClipComparisonVersion` (no `normalize` toggle — see §3).
 
-### 5.2 `ConfigClipVersion` / `ConfigPerceptionEncoderVersion`
+### 5.2 `ConfigClipGenerateVersion` / `ConfigClipComparisonVersion` / `ConfigPerceptionEncoderVersion`
 ```python
-class ConfigClipVersion(Config):
-    name: Literal["clipVersion"] = "ClipVersion"
+class ConfigClipGenerateVersion(Config):
+    name: Literal["clipGenerateVersion"] = "ClipGenerateVersion"
     value: Literal["ViT-B-16", "ViT-B-32", "RN50"] = "ViT-B-16"
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
 ```
 - CLIP options: `ViT-B-16` (default), `ViT-B-32`, `RN50`
 - Perception Encoder options: `PE-Core-B16-224` (default), `PE-Core-L14-336`
-- Only accessible when `ConfigXXXAdvance=True`
+- Only reachable when the corresponding `ConfigXXXAdvance=True`
 
-### 5.3 `ConfigClipNormalize` / `ConfigPerceptionEncoderNormalize`
+### 5.3 `ConfigClipGenerateNormalize` / `ConfigPerceptionEncoderNormalize`
 ```python
-class ConfigClipNormalize(Config):
-    name: Literal["clipNormalize"] = "ClipNormalize"
+class ConfigClipGenerateNormalize(Config):
+    name: Literal["clipGenerateNormalize"] = "ClipGenerateNormalize"
     value: bool = True
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
 ```
-- Default: `True` (ready for cosine similarity)
-- Only accessible when `ConfigXXXAdvance=True`
+- Default: `True` (ready for cosine-similarity comparisons).
+- ClipComparison has no equivalent toggle: `compare_image_to_texts()`
+  always L2-normalizes both sides internally, because cosine similarity
+  requires unit vectors to reduce to a plain dot product — leaving this
+  configurable would risk producing mathematically incorrect scores.
 
 ---
 
 ## 6. Output Parameters
 
-### 6.1 `OutputEmbedding`
+### 6.1 `OutputEmbedding` (ClipGenerate / PerceptionEncoder)
 ```python
 class OutputEmbedding(Output):
     name: Literal["outputEmbedding"] = "outputEmbedding"
@@ -197,23 +239,28 @@ class OutputEmbedding(Output):
     type: Literal["list"] = "list"
 ```
 
-### 6.2 `OutputMeta`
+### 6.2 `OutputSimilarities` (ClipComparison)
+```python
+class OutputSimilarities(Output):
+    name: Literal["outputSimilarities"] = "outputSimilarities"
+    value: Dict[str, float]
+    type: Literal["object"] = "object"
+```
+- Example: `{"boat": 0.82, "buoy": 0.41, "obstacle": 0.09}`
+- Values are cosine similarities (-1 to 1) between the image embedding
+  and each label's text embedding.
+
+### 6.3 `OutputMeta` (all executors)
 ```python
 class OutputMeta(Output):
     name: Literal["outputMeta"] = "outputMeta"
     value: dict
     type: Literal["object"] = "object"
 ```
-- Example structure:
-```json
-{
-  "model_family": "CLIP",
-  "model_version": "ViT-B-16",
-  "input_type": "image",
-  "embedding_dim": 512
-}
-```
-- Why it's needed: embeddings produced by different model versions do NOT live in the same vector space; this metadata exists to prevent incorrect comparisons.
+- ClipGenerate / PerceptionEncoder: `{"model_family", "model_version", "input_type", "embedding_dim"}`
+- ClipComparison: `{"model_family", "model_version", "num_classes"}`
+- Why needed: embeddings produced by different model versions live in
+  different vector spaces and must never be silently compared.
 
 ---
 
@@ -225,19 +272,19 @@ class OutputMeta(Output):
 [Executor.run()]
       |
       V
-OutputEmbedding(value=embedding) + OutputMeta(value=meta)
+OutputXxx(value=...) + OutputMeta(value=meta)
       |
       V
-ClipEmbeddingOutputs(outputEmbedding=..., outputMeta=...)
+XxxOutputs(...)
       |
       V
-ClipEmbeddingResponse(outputs=...)
+XxxResponse(outputs=...)
       |
       V
-ClipEmbeddingExecutor(value=clipResponse)
+XxxExecutor(value=xxxResponse)
       |
       V
-ConfigExecutor(value=clipExecutor)
+ConfigExecutor(value=xxxExecutor)
       |
       V
 PackageConfigs(executor=...)
@@ -246,140 +293,54 @@ PackageConfigs(executor=...)
 PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs)
       |
       V
-package.build_model(context)  --> real Novavision Response object
+package.build_model(context)  --> real NovaVision Response object
 ```
 
-Important difference: the Response is NOT built by directly returning the Pydantic model's `.dict()` -- it's built via a `PackageHelper.build_model(context)` call, which automatically fills in the required platform-level fields (`redis_db`, request metadata, etc.) using `context` (the executor's `self`).
+⚠ Note: the response is built via `PackageHelper.build_model(context)`,
+not by returning a Pydantic model's `.dict()` directly — this populates
+platform-level fields (`redis_db`, request metadata, etc.) from `context`
+(the executor's `self`).
 
 ---
 
 ## 8. Methodology and Algorithms
 
-### 8.1 Embedding Extraction with CLIP (verified in this environment)
-
-- Purpose: project an image or text into a shared vector space using a CLIP model loaded via `open_clip`
+### 8.1 CLIP Embedding Generation (✅ verified in this environment)
 
 - Steps:
-  1. Load the model + preprocess pipeline via `open_clip.create_model_and_transforms(model_name, pretrained="openai")`
+  1. `open_clip.create_model_and_transforms(model_name, pretrained="openai", force_quick_gelu=True)` loads the model + preprocessing pipeline
   2. Image: `preprocess(pil_image)` -> `model.encode_image()`
   3. Text: `tokenizer([text])` -> `model.encode_text()`
-  4. (Depending on config) L2 normalization: `features / features.norm(dim=-1, keepdim=True)`
+  4. (Config-dependent) L2-normalization: `features / features.norm(dim=-1, keepdim=True)`
+- Verification: forward-pass tested in this environment with a randomly
+  initialized ViT-B-16 (real OpenAI weights could not be downloaded here
+  — huggingface.co/openaipublic are not in the allowed network domain
+  list), confirming a `(512,)`-shaped output and norm ≈ 1.0 after
+  normalization. `force_quick_gelu` behavior was independently verified
+  by inspecting the layer type (`nn.GELU` vs `nn.QuickGELU`).
 
-- Verification note: in this environment, `open_clip_torch` was installed and the forward pass was tested with a randomly-initialized ViT-B-16: the image embedding was produced with shape `(512,)`, and the norm after normalization was confirmed to be approximately 1.0 (the real OpenAI weights could not be downloaded in this environment -- huggingface.co/openaipublic is not on the allowlisted domain list -- but the architecture/API flow is confirmed correct).
+### 8.2 CLIP Zero-Shot Comparison (✅ mechanics verified in this environment)
 
-- Advantages:
-  - Runs on CPU, GPU not required
-  - Zero-shot, no additional training required
+- Purpose: classify an image against free-text labels without training a
+  dedicated classifier — mirrors Roboflow's `roboflow_core/clip_comparison@v2`.
+- Steps:
+  1. Embed the image once via `encode_image()`, L2-normalize
+  2. Embed all provided labels in a single batched `encode_text()` call, L2-normalize
+  3. Cosine similarity reduces to a dot product once both sides are unit vectors: `image_features @ text_features.T`
+  4. Zip label strings to their similarity scores into a `Dict[str, float]`
+- Verification: `compare_image_to_texts()` was tested in this environment
+  with a randomly initialized ViT-B-16 and three labels (`"boat"`,
+  `"buoy"`, `"obstacle"`); confirmed all scores fall within [-1, 1] and
+  an empty label list returns an empty dict without error.
 
-### 8.2 Embedding Extraction with Perception Encoder (not verified)
+### 8.3 Perception Encoder Embedding Generation (⚠ Unverified)
 
-- Purpose: produce an alternative embedding to CLIP using Meta's Perception Encoder model
-- The `perception_models` package is not installed in this environment, so the import and API calls could not be run or tested.
-- Before using in a real environment:
+- Same as §8.1 but using `core.vision_encoder.pe.CLIP.from_config(...)`.
+- ⚠ The `perception_models` package is not installed in this environment,
+  so these import/API calls have **not** been executed or tested. Before
+  going to production:
   1. `pip install git+https://github.com/facebookresearch/perception_models.git`
-  2. Confirm the real class/function names inside `core.vision_encoder.pe` against `src/utils/utils.py::_load_perception_encoder`
-  3. Remember GPU/CUDA is required -- it does not run on CPU
-- Recommendation: verify the pipeline end-to-end with `ClipEmbedding` first, then separately test the Perception Encoder side on a machine with GPU access.
-
----
-
-## 9. Fixes Made After Claude Code Review
-
-This package was reviewed by Claude Code against the `cap-object-tracking` (ObjectTracking)
-reference code. Three findings and the fixes applied:
-
-### 9.1 (Critical, fixed) Config values were being read via `request.get_param()`
-
-**Problem:** the first version had the line
-`self.normalize = self.request.get_param("ClipNormalize")`. In the reference code,
-`request.get_param()` is used ONLY for names under `inputs` (`"inputImage"`,
-`"inputDetections"`); config values are read everywhere through a separate
-mechanism -- `Application().get_param(config=config, name=...)` -- and ONLY
-inside `bootstrap(config: dict)`. There is not a single example in the
-reference repo of `request.get_param()` being called with a config name.
-
-**Risk:** if the real SDK's `get_param()` only looks inside the `inputs` dict,
-this call would silently return `None`, and the "Normalize Embedding" toggle
-would appear in the UI but never actually have any effect.
-
-**Fix:** `normalize` is now read ONLY inside `bootstrap()`, via
-`_build_clip_cfg()` using `Application().get_param()`, and is fixed on
-`EmbeddingModelLoader` at bootstrap time (the `self.normalize` attribute).
-Inside `run()`, `request.get_param()` is now only called for `"inputData"`
-(an input).
-
-### 9.2 (Medium, fixed) `restart: Literal[True]` was missing
-
-In the reference, every config chain that loads a model/tracker inside
-bootstrap() is protected by an "Advance" wrapper carrying
-`restart: Literal[True] = True` (e.g. `ConfigBoTSortAdvance`). In the first
-version, `ConfigClipVersion` sat directly in the config list with no `restart`
-flag -- if the user changed the version, the platform might not know it
-needed to re-trigger `bootstrap()`.
-
-### 9.3 (Low, fixed) Configs sat at the top level without an Advance wrapper
-
-All 5 executors in the reference put ALL of their configurable parameters
-(even a single bool/enum) behind a `ConfigXXXAdvance`
-(`dependentDropdownlist`, `restart=True`) wrapper. In the first version,
-`configClipVersion`/`configClipNormalize` sat directly at the top level of
-`ClipEmbeddingConfigs` without this wrapper.
-
-**Fix:** `ConfigClipAdvance`/`ConfigPerceptionEncoderAdvance` were added
-(True/False variants, `restart=True`), bringing consistency and also fixing
-the missing-restart issue from section 9.2 at the same time.
-
-### 9.4 Minor note (cleaned up)
-
-`load_clip_loader`/`load_perception_encoder_loader` computed `cfg.normalize`
-but never passed it to `EmbeddingModelLoader` (dead code). Now
-`normalize=cfg.normalize` is passed to the loader and is used in
-`embed_image`/`embed_text` whenever no parameter is given at call time. This
-behavior was verified in isolation by mocking the `sdks` module:
-`normalize=False` -> norm ≈ 22.3 (not normalized), `normalize=True` -> norm =
-1.0 (confirmed).
-
-### Points still unverified
-
-- The `field="option"` type (for bool/enum configs) is a widget type
-  confirmed in the reference, but the reference code had no example of it
-  being used WITHOUT an Advance wrapper -- this concern is now moot since
-  this package also uses an Advance wrapper.
-- The `isinstance(self.input_data, dict) and self.input_data.get("type") ==
-  "Image"` check relies on the assumption that `get_param()` returns a raw
-  dict/list for inputs (consistent with the reference's
-  `input_detections[0]["imgUID"]` usage) -- low risk, but should be
-  confirmed on the first real SDK test.
-- The Perception Encoder side is still unverified (see section 8.2).
-
----
-
-## 10. Real-Environment Test Finding (QuickGELU)
-
-On the first real run (on your machine, via Claude Code), the following
-warning was observed: a 512-D embedding was successfully produced for the
-text `"a red buoy on water"` with `ViT-B-16`, but a "QuickGELU mismatch"
-warning appeared between the model config and OpenAI's pretrained weights.
-
-**Root cause (verified):** `open_clip.get_pretrained_cfg("ViT-B-16",
-"openai")`'s config has a `quick_gelu: True` field -- meaning OpenAI's
-original CLIP weights (`ViT-B-16`, `ViT-B-32`, `RN50` -- all three checked)
-were trained with QuickGELU activation. Without `force_quick_gelu=True` in
-the `create_model_and_transforms()` call, the model is built with the
-default (standard) `nn.GELU`, and the weights end up loaded with the wrong
-activation function.
-
-**Risk:** this is not a "harmless" warning -- the forward pass runs without
-error and produces an embedding, but the resulting embedding drifts from
-the activation function used at training time. In other words, the result
-can be silently wrong (it appears to work, but quality may be degraded).
-
-**Verification:** the layer type was directly inspected in this environment:
-```python
-force_quick_gelu=False (default) -> nn.GELU
-force_quick_gelu=True            -> nn.QuickGELU
-```
-
-**Fix:** `force_quick_gelu=True` was added in
-`src/utils/utils.py::EmbeddingModelLoader._load_clip()` and in
-`apps/quick_test.py`.
+  2. Confirm the actual class/function names in `core.vision_encoder.pe`
+     against the installed package version inside
+     `src/utils/utils.py::_load_perception_encoder`
+  3. Remember the GPU/CUDA requirement — this path does not run on CPU

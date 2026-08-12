@@ -1,7 +1,7 @@
-"""Executor for CLIP-based embedding extraction in NovaVision pipeline.
+"""Executor for CLIP-based embedding generation in the NovaVision pipeline.
 
 Handles single image/text ingestion and semantic embedding generation
-using an open_clip backbone (ViT-B-16, ViT-B-32 or RN50).
+using an open_clip backbone (ViT-B-16, ViT-B-32, or RN50).
 """
 
 import os
@@ -14,11 +14,11 @@ from sdks.novavision.src.helper.executor import Executor
 from sdks.novavision.src.media.image import Image
 
 from capsules.EmbeddingExtraction.src.models.PackageModel import PackageModel
-from capsules.EmbeddingExtraction.src.utils.response import build_clip_response
-from capsules.EmbeddingExtraction.src.utils.utils import load_clip_loader
+from capsules.EmbeddingExtraction.src.utils.response import build_clip_generate_response
+from capsules.EmbeddingExtraction.src.utils.utils import load_clip_generate_loader
 
 
-class ClipEmbedding(Capsule):
+class ClipGenerate(Capsule):
     def __init__(self, request, bootstrap):
         super().__init__(request, bootstrap)
         self.request.model = PackageModel(**(self.request.data))
@@ -26,7 +26,7 @@ class ClipEmbedding(Capsule):
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
-        loader = load_clip_loader(config=config)
+        loader = load_clip_generate_loader(config=config)
         return {"loader": loader}
 
     def run(self):
@@ -48,7 +48,7 @@ class ClipEmbedding(Capsule):
             "embedding_dim": int(embedding_vector.shape[0]),
         }
 
-        packageModel = build_clip_response(
+        packageModel = build_clip_generate_response(
             context=self,
             embedding=embedding_vector.tolist(),
             meta=meta,

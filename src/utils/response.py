@@ -3,25 +3,46 @@ from capsules.EmbeddingExtraction.src.models.PackageModel import (
     PackageModel,
     PackageConfigs,
     ConfigExecutor,
-    ClipEmbeddingResponse,
-    ClipEmbeddingExecutor,
-    ClipEmbeddingOutputs,
-    PerceptionEncoderEmbeddingResponse,
-    PerceptionEncoderEmbeddingExecutor,
-    PerceptionEncoderEmbeddingOutputs,
+    ClipGenerateResponse,
+    ClipGenerateExecutor,
+    ClipGenerateOutputs,
+    ClipComparisonResponse,
+    ClipComparisonExecutor,
+    ClipComparisonOutputs,
+    PerceptionEncoderResponse,
+    PerceptionEncoderExecutor,
+    PerceptionEncoderOutputs,
     OutputEmbedding,
     OutputMeta,
+    OutputSimilarities,
 )
 
 
-def build_clip_response(context, embedding, meta):
+def build_clip_generate_response(context, embedding, meta):
     outputEmbedding = OutputEmbedding(value=embedding)
     outputMeta = OutputMeta(value=meta)
-    clipOutputs = ClipEmbeddingOutputs(outputEmbedding=outputEmbedding, outputMeta=outputMeta)
-    clipResponse = ClipEmbeddingResponse(outputs=clipOutputs)
-    clipExecutor = ClipEmbeddingExecutor(value=clipResponse)
+    clipOutputs = ClipGenerateOutputs(outputEmbedding=outputEmbedding, outputMeta=outputMeta)
+    clipResponse = ClipGenerateResponse(outputs=clipOutputs)
+    clipExecutor = ClipGenerateExecutor(value=clipResponse)
 
     executor = ConfigExecutor(value=clipExecutor)
+    packageConfigs = PackageConfigs(executor=executor)
+
+    package = PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs)
+    packageModel = package.build_model(context)
+    return packageModel
+
+
+def build_clip_comparison_response(context, similarities, meta):
+    outputSimilarities = OutputSimilarities(value=similarities)
+    outputMeta = OutputMeta(value=meta)
+    comparisonOutputs = ClipComparisonOutputs(
+        outputSimilarities=outputSimilarities, outputMeta=outputMeta
+    )
+    comparisonResponse = ClipComparisonResponse(outputs=comparisonOutputs)
+    comparisonExecutor = ClipComparisonExecutor(value=comparisonResponse)
+
+    executor = ConfigExecutor(value=comparisonExecutor)
     packageConfigs = PackageConfigs(executor=executor)
 
     package = PackageHelper(packageModel=PackageModel, packageConfigs=packageConfigs)
@@ -32,11 +53,11 @@ def build_clip_response(context, embedding, meta):
 def build_perception_encoder_response(context, embedding, meta):
     outputEmbedding = OutputEmbedding(value=embedding)
     outputMeta = OutputMeta(value=meta)
-    peOutputs = PerceptionEncoderEmbeddingOutputs(
+    peOutputs = PerceptionEncoderOutputs(
         outputEmbedding=outputEmbedding, outputMeta=outputMeta
     )
-    peResponse = PerceptionEncoderEmbeddingResponse(outputs=peOutputs)
-    peExecutor = PerceptionEncoderEmbeddingExecutor(value=peResponse)
+    peResponse = PerceptionEncoderResponse(outputs=peOutputs)
+    peExecutor = PerceptionEncoderExecutor(value=peResponse)
 
     executor = ConfigExecutor(value=peExecutor)
     packageConfigs = PackageConfigs(executor=executor)

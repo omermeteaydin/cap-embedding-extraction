@@ -1,5 +1,5 @@
-from pydantic import validator
-from typing import List, Optional, Union, Literal
+from pydantic import validator, Field
+from typing import Dict, List, Optional, Union, Literal
 
 from sdks.novavision.src.base.model import Package, Configs, Outputs, Inputs, \
     Response, Request, Output, Input, Config, Image
@@ -7,7 +7,7 @@ from sdks.novavision.src.base.model import Package, Configs, Outputs, Inputs, \
 
 class InputData(Input):
     """
-    Shared input for CLIP / Perception Encoder: a single image OR free text.
+    Shared input for embedding generation: a single image OR free text.
     Same contract as Roboflow's `data` field (Union[image, string]).
     """
     name: Literal["inputData"] = "inputData"
@@ -37,7 +37,7 @@ class OutputEmbedding(Output):
 class OutputMeta(Output):
     """
     Traceability info about which model family/version produced the
-    embedding. Kept to prevent accidentally comparing embeddings that
+    output. Kept to prevent accidentally comparing embeddings that
     were produced by different model versions (different vector spaces).
     """
     name: Literal["outputMeta"] = "outputMeta"
@@ -49,13 +49,15 @@ class OutputMeta(Output):
 
 
 # ==========================================
-# 1. CLIP Executor Configurations
+# 1. ClipGenerate Executor Configurations
 # ==========================================
+# Image or text -> a single embedding vector.
+# Mirrors Roboflow's `roboflow_core/clip@v1` block.
 
 
-class ConfigClipVersion(Config):
+class ConfigClipGenerateVersion(Config):
     """CLIP backbone / resolution variant."""
-    name: Literal["clipVersion"] = "ClipVersion"
+    name: Literal["clipGenerateVersion"] = "ClipGenerateVersion"
     value: Literal["ViT-B-16", "ViT-B-32", "RN50"] = "ViT-B-16"
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
@@ -67,9 +69,9 @@ class ConfigClipVersion(Config):
         }
 
 
-class ConfigClipNormalize(Config):
+class ConfigClipGenerateNormalize(Config):
     """Whether the output embedding should be L2-normalized."""
-    name: Literal["clipNormalize"] = "ClipNormalize"
+    name: Literal["clipGenerateNormalize"] = "ClipGenerateNormalize"
     value: bool = True
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
@@ -81,19 +83,19 @@ class ConfigClipNormalize(Config):
         }
 
 
-class ConfigClipAdvanceTrue(Config):
+class ConfigClipGenerateAdvanceTrue(Config):
     name: Literal["True"] = "True"
     value: Literal["True"] = "True"
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
-    configClipVersion: ConfigClipVersion
-    configClipNormalize: ConfigClipNormalize
+    configClipGenerateVersion: ConfigClipGenerateVersion
+    configClipGenerateNormalize: ConfigClipGenerateNormalize
 
     class Config:
         title = "Enable"
 
 
-class ConfigClipAdvanceFalse(Config):
+class ConfigClipGenerateAdvanceFalse(Config):
     name: Literal["False"] = "False"
     value: Literal["False"] = "False"
     type: Literal["bool"] = "bool"
@@ -103,15 +105,15 @@ class ConfigClipAdvanceFalse(Config):
         title = "Disable"
 
 
-class ConfigClipAdvance(Config):
+class ConfigClipGenerateAdvance(Config):
     """
-    Enable advanced settings for CLIP embedding (version, normalize).
-    Same pattern as ConfigBoTSortAdvance in `ObjectTracking`: configs that
-    affect the model-loading decision must carry restart=True so the
-    platform knows to re-trigger bootstrap().
+    Enable advanced settings for CLIP embedding generation (version,
+    normalize). Same pattern as ConfigBoTSortAdvance in `ObjectTracking`:
+    configs that affect the model-loading decision must carry
+    restart=True so the platform knows to re-trigger bootstrap().
     """
-    name: Literal["ConfigClipAdvance"] = "ConfigClipAdvance"
-    value: Union[ConfigClipAdvanceTrue, ConfigClipAdvanceFalse]
+    name: Literal["ConfigClipGenerateAdvance"] = "ConfigClipGenerateAdvance"
+    value: Union[ConfigClipGenerateAdvanceTrue, ConfigClipGenerateAdvanceFalse]
     type: Literal["object"] = "object"
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
     restart: Literal[True] = True
@@ -123,22 +125,22 @@ class ConfigClipAdvance(Config):
         }
 
 
-class ClipEmbeddingConfigs(Configs):
-    configClipAdvance: ConfigClipAdvance
+class ClipGenerateConfigs(Configs):
+    configClipGenerateAdvance: ConfigClipGenerateAdvance
 
 
-class ClipEmbeddingInputs(Inputs):
+class ClipGenerateInputs(Inputs):
     inputData: InputData
 
 
-class ClipEmbeddingOutputs(Outputs):
+class ClipGenerateOutputs(Outputs):
     outputEmbedding: OutputEmbedding
     outputMeta: OutputMeta
 
 
-class ClipEmbeddingRequest(Request):
-    inputs: Optional[ClipEmbeddingInputs] = None
-    configs: ClipEmbeddingConfigs
+class ClipGenerateRequest(Request):
+    inputs: Optional[ClipGenerateInputs] = None
+    configs: ClipGenerateConfigs
 
     class Config:
         json_schema_extra = {
@@ -146,18 +148,18 @@ class ClipEmbeddingRequest(Request):
         }
 
 
-class ClipEmbeddingResponse(Response):
-    outputs: ClipEmbeddingOutputs
+class ClipGenerateResponse(Response):
+    outputs: ClipGenerateOutputs
 
 
-class ClipEmbeddingExecutor(Config):
-    name: Literal["ClipEmbedding"] = "ClipEmbedding"
-    value: Union[ClipEmbeddingRequest, ClipEmbeddingResponse]
+class ClipGenerateExecutor(Config):
+    name: Literal["ClipGenerate"] = "ClipGenerate"
+    value: Union[ClipGenerateRequest, ClipGenerateResponse]
     type: Literal["object"] = "object"
     field: Literal["option"] = "option"
 
     class Config:
-        title = "ClipEmbedding"
+        title = "Clip (Generate)"
         json_schema_extra = {
             "target": {
                 "value": 0
@@ -166,8 +168,148 @@ class ClipEmbeddingExecutor(Config):
 
 
 # ==========================================
-# 2. Perception Encoder Executor Configurations
+# 2. ClipComparison Executor Configurations
 # ==========================================
+# Image + a list of text labels -> similarity score per label.
+# Mirrors Roboflow's `roboflow_core/clip_comparison@v2` block
+# (zero-shot classification without training a dedicated model).
+
+
+class InputComparisonImage(Input):
+    """The image to classify against the provided text labels."""
+    name: Literal["inputImage"] = "inputImage"
+    value: Image
+    type: Literal["object"] = "object"
+
+    class Config:
+        title = "Image"
+
+
+class InputComparisonClasses(Input):
+    """
+    Free-text labels to compare the image against, e.g. ["boat", "buoy",
+    "obstacle"]. Same role as Roboflow clip_comparison's `classes` field.
+    """
+    name: Literal["inputClasses"] = "inputClasses"
+    value: List[str] = Field(default_factory=list)
+    type: Literal["list"] = "list"
+
+    class Config:
+        title = "Classes"
+
+
+class ConfigClipComparisonVersion(Config):
+    """CLIP backbone / resolution variant."""
+    name: Literal["clipComparisonVersion"] = "ClipComparisonVersion"
+    value: Literal["ViT-B-16", "ViT-B-32", "RN50"] = "ViT-B-16"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "CLIP Version"
+        json_schema_extra = {
+            "shortDescription": "Model Variant"
+        }
+
+
+class ConfigClipComparisonAdvanceTrue(Config):
+    name: Literal["True"] = "True"
+    value: Literal["True"] = "True"
+    type: Literal["bool"] = "bool"
+    field: Literal["option"] = "option"
+    configClipComparisonVersion: ConfigClipComparisonVersion
+
+    class Config:
+        title = "Enable"
+
+
+class ConfigClipComparisonAdvanceFalse(Config):
+    name: Literal["False"] = "False"
+    value: Literal["False"] = "False"
+    type: Literal["bool"] = "bool"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Disable"
+
+
+class ConfigClipComparisonAdvance(Config):
+    """Enable advanced settings for CLIP comparison (version selection)."""
+    name: Literal["ConfigClipComparisonAdvance"] = "ConfigClipComparisonAdvance"
+    value: Union[ConfigClipComparisonAdvanceTrue, ConfigClipComparisonAdvanceFalse]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+    restart: Literal[True] = True
+
+    class Config:
+        title = "Advance"
+        json_schema_extra = {
+            "shortDescription": "Advanced Settings"
+        }
+
+
+class ClipComparisonConfigs(Configs):
+    configClipComparisonAdvance: ConfigClipComparisonAdvance
+
+
+class ClipComparisonInputs(Inputs):
+    inputImage: InputComparisonImage
+    inputClasses: InputComparisonClasses
+
+
+class OutputSimilarities(Output):
+    """
+    Similarity score (0-1, cosine similarity rescaled) for each provided
+    class label, e.g. {"boat": 0.82, "buoy": 0.41, "obstacle": 0.09}.
+    """
+    name: Literal["outputSimilarities"] = "outputSimilarities"
+    value: Dict[str, float]
+    type: Literal["object"] = "object"
+
+    class Config:
+        title = "Similarities"
+
+
+class ClipComparisonOutputs(Outputs):
+    outputSimilarities: OutputSimilarities
+    outputMeta: OutputMeta
+
+
+class ClipComparisonRequest(Request):
+    inputs: Optional[ClipComparisonInputs] = None
+    configs: ClipComparisonConfigs
+
+    class Config:
+        json_schema_extra = {
+            "target": "configs"
+        }
+
+
+class ClipComparisonResponse(Response):
+    outputs: ClipComparisonOutputs
+
+
+class ClipComparisonExecutor(Config):
+    name: Literal["ClipComparison"] = "ClipComparison"
+    value: Union[ClipComparisonRequest, ClipComparisonResponse]
+    type: Literal["object"] = "object"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "Clip (Comparison)"
+        json_schema_extra = {
+            "target": {
+                "value": 0
+            }
+        }
+
+
+# ==========================================
+# 3. PerceptionEncoder Executor Configurations
+# ==========================================
+# Image or text -> a single embedding vector (Generate only; Roboflow
+# does not currently offer a dedicated Perception Encoder comparison
+# block, so this package doesn't either).
 # GPU/CUDA is required (Roboflow's own roboflow_core/perception_encoder@v1
 # block documents the same constraint). Not verified end-to-end in this
 # environment because the `perception_models` package is not installed.
@@ -237,22 +379,22 @@ class ConfigPerceptionEncoderAdvance(Config):
         }
 
 
-class PerceptionEncoderEmbeddingConfigs(Configs):
+class PerceptionEncoderConfigs(Configs):
     configPerceptionEncoderAdvance: ConfigPerceptionEncoderAdvance
 
 
-class PerceptionEncoderEmbeddingInputs(Inputs):
+class PerceptionEncoderInputs(Inputs):
     inputData: InputData
 
 
-class PerceptionEncoderEmbeddingOutputs(Outputs):
+class PerceptionEncoderOutputs(Outputs):
     outputEmbedding: OutputEmbedding
     outputMeta: OutputMeta
 
 
-class PerceptionEncoderEmbeddingRequest(Request):
-    inputs: Optional[PerceptionEncoderEmbeddingInputs] = None
-    configs: PerceptionEncoderEmbeddingConfigs
+class PerceptionEncoderRequest(Request):
+    inputs: Optional[PerceptionEncoderInputs] = None
+    configs: PerceptionEncoderConfigs
 
     class Config:
         json_schema_extra = {
@@ -260,18 +402,18 @@ class PerceptionEncoderEmbeddingRequest(Request):
         }
 
 
-class PerceptionEncoderEmbeddingResponse(Response):
-    outputs: PerceptionEncoderEmbeddingOutputs
+class PerceptionEncoderResponse(Response):
+    outputs: PerceptionEncoderOutputs
 
 
-class PerceptionEncoderEmbeddingExecutor(Config):
-    name: Literal["PerceptionEncoderEmbedding"] = "PerceptionEncoderEmbedding"
-    value: Union[PerceptionEncoderEmbeddingRequest, PerceptionEncoderEmbeddingResponse]
+class PerceptionEncoderExecutor(Config):
+    name: Literal["PerceptionEncoder"] = "PerceptionEncoder"
+    value: Union[PerceptionEncoderRequest, PerceptionEncoderResponse]
     type: Literal["object"] = "object"
     field: Literal["option"] = "option"
 
     class Config:
-        title = "PerceptionEncoderEmbedding"
+        title = "Perception Encoder"
         json_schema_extra = {
             "target": {
                 "value": 0
@@ -280,15 +422,16 @@ class PerceptionEncoderEmbeddingExecutor(Config):
 
 
 # ==========================================
-# 3. Global Package Configuration
+# 4. Global Package Configuration
 # ==========================================
 
 
 class ConfigExecutor(Config):
     name: Literal["ConfigExecutor"] = "ConfigExecutor"
     value: Union[
-        ClipEmbeddingExecutor,
-        PerceptionEncoderEmbeddingExecutor,
+        ClipGenerateExecutor,
+        ClipComparisonExecutor,
+        PerceptionEncoderExecutor,
     ]
     type: Literal["executor"] = "executor"
     field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
