@@ -1,3 +1,5 @@
+"""TEST 2 -- setup.py (minimal install_requires, torch/open_clip_torch cikarilmis)"""
+
 import setuptools
 
 setuptools.setup(
@@ -5,15 +7,10 @@ setuptools.setup(
     version="0.0.1",
     author="DigiNova",
     author_email="info@diginova.com.tr",
-    description="NOVAVISION Embedding Extraction (CLIP / Perception Encoder)",
+    description="NOVAVISION Embedding Extraction (DEBUG: minimal deps)",
     license="MIT",
     install_requires=[
-        "torch>=2.0.0",
-        "open_clip_torch>=2.24.0",
-        "numpy",
-        "Pillow",
-        # Perception Encoder is optional (requires GPU, separate install):
-        # git+https://github.com/facebookresearch/perception_models.git
+        "pydantic>=1.10,<2.0",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -29,4 +26,3 @@ setuptools.setup(
     package_dir={"novavision.cap.embedding-extraction": "src"},
     python_requires=">=3.9",
 )
-
