@@ -1,7 +1,14 @@
-"""Executor for CLIP-based embedding generation in the NovaVision pipeline.
+"""
+GEÇİCİ TEST VERSİYONU -- torch/open_clip'i hiç import etmez.
+Amaç: bootstrap()/run() akışının kendisinin (sdks.novavision entegrasyonu,
+Response inşası) çalışıp çalışmadığını, torch/open_clip'ten BAĞIMSIZ olarak
+görmek. Eğer bu versiyon çalışıp bir çıktı üretirse, sorunun kesinlikle
+torch/open_clip_torch kurulumunda olduğu kanıtlanmış olur.
 
-Handles single image/text ingestion and semantic embedding generation
-using an open_clip backbone (ViT-B-16, ViT-B-32, or RN50).
+KULLANIM: Bu dosyanın içeriğini src/executors/ClipGenerate.py'nin
+ÜZERİNE geçici olarak kopyala, commit+push et, platformda paketi
+yeniden yükle/senkronize et, Run Flow'u dene. Sonucu paylaş, sonra
+orijinal ClipGenerate.py'ye geri dön (git checkout ile).
 """
 
 import os
@@ -11,11 +18,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../"))
 
 from sdks.novavision.src.base.capsule import Capsule
 from sdks.novavision.src.helper.executor import Executor
-from sdks.novavision.src.media.image import Image
+# DİKKAT: utils.py import edilmiyor -- torch/open_clip hiç yüklenmiyor.
 
 from capsules.EmbeddingExtraction.src.models.PackageModel import PackageModel
 from capsules.EmbeddingExtraction.src.utils.response import build_clip_generate_response
-from capsules.EmbeddingExtraction.src.utils.utils import load_clip_generate_loader
 
 
 class ClipGenerate(Capsule):
@@ -26,31 +32,24 @@ class ClipGenerate(Capsule):
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
-        loader = load_clip_generate_loader(config=config)
-        return {"loader": loader}
+        # Gerçek model yüklemiyor -- sadece bootstrap()'ın çağrılıp
+        # çağrılmadığını, hata verip vermediğini test ediyoruz.
+        return {"loader": None}
 
     def run(self):
-        loader = self.bootstrap["loader"]
-
-        if isinstance(self.input_data, dict) and self.input_data.get("type") == "Image":
-            image = Image.get_frame(img=self.input_data, redis_db=self.redis_db)
-            image_array = image.value if image is not None else None
-            embedding_vector = loader.embed_image(image_array)
-            input_type = "image"
-        else:
-            embedding_vector = loader.embed_text(str(self.input_data))
-            input_type = "text"
+        # Sahte, sabit bir embedding dönüyoruz -- torch/open_clip'e hiç dokunmadan.
+        fake_embedding = [0.1] * 512
 
         meta = {
-            "model_family": loader.model_family,
-            "model_version": loader.model_version,
-            "input_type": input_type,
-            "embedding_dim": int(embedding_vector.shape[0]),
+            "model_family": "DEBUG",
+            "model_version": "fake",
+            "input_type": "unknown",
+            "embedding_dim": 512,
         }
 
         packageModel = build_clip_generate_response(
             context=self,
-            embedding=embedding_vector.tolist(),
+            embedding=fake_embedding,
             meta=meta,
         )
         return packageModel
