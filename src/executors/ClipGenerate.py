@@ -6,6 +6,7 @@ using an open_clip backbone (ViT-B-16, ViT-B-32, or RN50).
 
 import os
 import sys
+import traceback
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../"))
 
@@ -26,34 +27,68 @@ class ClipGenerate(Capsule):
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
-        loader = load_clip_generate_loader(config=config)
-        return {"loader": loader}
+        # TEMPORARY DEBUG: platform LOG has been unreliable (only a
+        # WebSocket cert error shows up, never the real traceback), so
+        # bootstrap failures are caught here and handed to run() via the
+        # returned dict instead of raising -- raising here would prevent
+        # run() (and outputMeta) from ever being reached.
+        # Remove this try/except once platform logging is confirmed reliable.
+        try:
+            loader = load_clip_generate_loader(config=config)
+            return {"loader": loader, "bootstrap_error": None}
+        except Exception:
+            tb = traceback.format_exc()
+            print(f"[ClipGenerate.bootstrap] DEBUG ERROR:\n{tb}", file=sys.stderr, flush=True)
+            return {"loader": None, "bootstrap_error": tb}
 
     def run(self):
-        loader = self.bootstrap["loader"]
+        # TEMPORARY DEBUG: surfaces the real exception (type + message +
+        # traceback) inside outputMeta so it is visible in the flow's
+        # Output/Raw tab without depending on platform LOG streaming.
+        # Remove this try/except once LOG is confirmed reliable again.
+        bootstrap_error = self.bootstrap.get("bootstrap_error")
+        if bootstrap_error:
+            meta = {
+                "DEBUG_STAGE": "bootstrap",
+                "DEBUG_TRACEBACK": bootstrap_error,
+            }
+            return build_clip_generate_response(context=self, embedding=[], meta=meta)
 
-        if isinstance(self.input_data, dict) and self.input_data.get("type") == "Image":
-            image = Image.get_frame(img=self.input_data, redis_db=self.redis_db)
-            image_array = image.value if image is not None else None
-            embedding_vector = loader.embed_image(image_array)
-            input_type = "image"
-        else:
-            embedding_vector = loader.embed_text(str(self.input_data))
-            input_type = "text"
+        try:
+            loader = self.bootstrap["loader"]
 
-        meta = {
-            "model_family": loader.model_family,
-            "model_version": loader.model_version,
-            "input_type": input_type,
-            "embedding_dim": int(embedding_vector.shape[0]),
-        }
+            if isinstance(self.input_data, dict) and self.input_data.get("type") == "Image":
+                image = Image.get_frame(img=self.input_data, redis_db=self.redis_db)
+                image_array = image.value if image is not None else None
+                embedding_vector = loader.embed_image(image_array)
+                input_type = "image"
+            else:
+                embedding_vector = loader.embed_text(str(self.input_data))
+                input_type = "text"
 
-        packageModel = build_clip_generate_response(
-            context=self,
-            embedding=embedding_vector.tolist(),
-            meta=meta,
-        )
-        return packageModel
+            meta = {
+                "model_family": loader.model_family,
+                "model_version": loader.model_version,
+                "input_type": input_type,
+                "embedding_dim": int(embedding_vector.shape[0]),
+            }
+
+            packageModel = build_clip_generate_response(
+                context=self,
+                embedding=embedding_vector.tolist(),
+                meta=meta,
+            )
+            return packageModel
+        except Exception as exc:
+            tb = traceback.format_exc()
+            print(f"[ClipGenerate.run] DEBUG ERROR:\n{tb}", file=sys.stderr, flush=True)
+            meta = {
+                "DEBUG_STAGE": "run",
+                "DEBUG_ERROR_TYPE": type(exc).__name__,
+                "DEBUG_ERROR_MESSAGE": str(exc),
+                "DEBUG_TRACEBACK": tb,
+            }
+            return build_clip_generate_response(context=self, embedding=[], meta=meta)
 
 
 if "__main__" == __name__:
