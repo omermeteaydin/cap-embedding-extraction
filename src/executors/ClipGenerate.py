@@ -1,38 +1,48 @@
 """
-DEBUG TEST 4 -- torch/open_clip_torch tamamen cikarilmis, saf minimal
-setup.py. Amac: build/deploy asamasinin agir bagimliliklarda (torch ~2GB)
-timeout/basarisiz olma ihtimalini izole etmek.
+DEBUG TEST 3 -- Capsule yerine Component base sinifini deniyoruz.
 
-KULLANIM: Bu icerigi setup.py'nin uzerine koy, requirements_MINIMAL.txt'yi
-de requirements.txt'nin uzerine koy. ClipGenerate.py'yi Test 3'teki
-(DEBUG_MARKER, orijinal Capsule versiyonu) haline dondur -- yani SADECE
-bagimliliklari degistiriyoruz, kod ayni kalsin ki neyin etkili oldugunu
-ayirt edebilelim.
+Ugur Hoca'nin platformda birakti gi sablon dosyada (novavision-ai/cap-embedding,
+Initial commit) su desen kullaniliyordu:
+
+    from sdks.novavision.src.base.component import Component   <- Capsule DEGIL
+    class Package(Component):                                   <- Capsule DEGIL
+
+Bizim kodumuz (ve referans ObjectTracking) her yerde Capsule kullaniyor.
+Eger platformdaki guncel SDK'da Capsule sinifi artik yoksa (Component'e
+donusmusse), "from sdks.novavision.src.base.capsule import Capsule" satiri
+dosyanin en tepesinde, run()'a hic ulasmadan ModuleNotFoundError ile patlar --
+bu da onceki 3 testimizin (gercek CLIP, sahte embedding, "sadece raise")
+neden UCUNUN DE ayni sekilde sessiz kaldigini acikliyor olabilir.
+
+KULLANIM: src/executors/ClipGenerate.py'nin icerigini GECICI olarak
+bununla degistir, commit+push et, platformda senkronize et, Run Flow,
+LOG ekranina bak.
+
+Bu SADECE Capsule/Component farkini izole ediyor -- requirements.txt/
+setup.py'ye HIC DOKUNMA, sadece bu .py dosyasini degistir. Ikinci testi
+(minimal requirements.txt) bununla AYNI ANDA YAPMA, sonucu ayirt edemeyiz.
 """
 
-import setuptools
+import os
+import sys
 
-setuptools.setup(
-    name="novavision-cap-embedding-extraction",
-    version="0.0.1",
-    author="DigiNova",
-    author_email="info@diginova.com.tr",
-    description="NOVAVISION Embedding Extraction (DEBUG: minimal deps)",
-    license="MIT",
-    install_requires=[
-        "pydantic>=1.10,<2.0",
-    ],
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ],
-    packages=[
-        "novavision.cap.embedding-extraction",
-        "novavision.cap.embedding-extraction.executors",
-        "novavision.cap.embedding-extraction.models",
-        "novavision.cap.embedding-extraction.utils",
-    ],
-    package_dir={"novavision.cap.embedding-extraction": "src"},
-    python_requires=">=3.9",
-)
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../"))
+
+from sdks.novavision.src.base.component import Component
+from sdks.novavision.src.helper.executor import Executor
+
+
+class ClipGenerate(Component):
+    def __init__(self, request, bootstrap):
+        super().__init__(request, bootstrap)
+
+    @staticmethod
+    def bootstrap(config: dict) -> dict:
+        return {}
+
+    def run(self):
+        raise Exception("DEBUG_MARKER_COMPONENT: run() reached via Component base class")
+
+
+if "__main__" == __name__:
+    Executor(sys.argv[1]).run()
