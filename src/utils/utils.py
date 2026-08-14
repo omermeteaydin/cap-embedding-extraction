@@ -17,6 +17,7 @@ Notes:
 
 from types import SimpleNamespace
 from typing import Dict, List
+import sys
 
 import numpy as np
 import torch
@@ -158,7 +159,25 @@ class EmbeddingModelLoader:
             raise ValueError(f"Unknown model family: '{self.model_family}'")
 
     def _load_clip(self):
-        import open_clip  # pip install open_clip_torch
+        # TEMPORARY DEBUG: platform's requirements.txt does not appear to be
+        # installed into the container (confirmed via outputMeta traceback:
+        # "ModuleNotFoundError: No module named 'open_clip'"). This fallback
+        # installs the missing packages at runtime as a one-time diagnostic
+        # to confirm the CODE itself works once dependencies are present --
+        # this is NOT a permanent fix. Remove once the platform's deployment
+        # process installs requirements.txt correctly.
+        try:
+            import open_clip
+        except ImportError:
+            import subprocess
+            print("[ClipGenerate] open_clip not found, attempting runtime install "
+                  "(TEMPORARY DEBUG -- this should not be needed once deployment "
+                  "installs requirements.txt correctly)", file=sys.stderr, flush=True)
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install",
+                "torch>=2.0.0", "open_clip_torch>=2.24.0",
+            ])
+            import open_clip
 
         model_name, pretrained = CLIP_VERSION_TO_OPEN_CLIP[self.model_version]
         # OpenAI's original CLIP weights (ViT-B-16/32, RN50) were trained
