@@ -36,21 +36,35 @@ class ClipGenerate(Capsule):
         try:
             loader = load_clip_generate_loader(config=config)
             return {"loader": loader, "bootstrap_error": None}
-        except Exception:
+        except Exception as exc:
             tb = traceback.format_exc()
             print(f"[ClipGenerate.bootstrap] DEBUG ERROR:\n{tb}", file=sys.stderr, flush=True)
-            return {"loader": None, "bootstrap_error": tb}
+            return {
+                "loader": None,
+                "bootstrap_error": {
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                    "traceback": tb,
+                },
+            }
 
     def run(self):
         # TEMPORARY DEBUG: surfaces the real exception (type + message +
         # traceback) inside outputMeta so it is visible in the flow's
         # Output/Raw tab without depending on platform LOG streaming.
+        # The traceback is split into a list of lines (rather than one long
+        # string) because the platform's UI misinterpreted a long single
+        # string as base64 image data and rendered an "Image Preview"
+        # instead of the text -- short fields (type/message) plus a line
+        # list avoid that.
         # Remove this try/except once LOG is confirmed reliable again.
         bootstrap_error = self.bootstrap.get("bootstrap_error")
         if bootstrap_error:
             meta = {
                 "DEBUG_STAGE": "bootstrap",
-                "DEBUG_TRACEBACK": bootstrap_error,
+                "DEBUG_ERROR_TYPE": bootstrap_error["type"],
+                "DEBUG_ERROR_MESSAGE": bootstrap_error["message"],
+                "DEBUG_TRACEBACK_LINES": bootstrap_error["traceback"].splitlines(),
             }
             return build_clip_generate_response(context=self, embedding=[], meta=meta)
 
@@ -86,7 +100,7 @@ class ClipGenerate(Capsule):
                 "DEBUG_STAGE": "run",
                 "DEBUG_ERROR_TYPE": type(exc).__name__,
                 "DEBUG_ERROR_MESSAGE": str(exc),
-                "DEBUG_TRACEBACK": tb,
+                "DEBUG_TRACEBACK_LINES": tb.splitlines(),
             }
             return build_clip_generate_response(context=self, embedding=[], meta=meta)
 
