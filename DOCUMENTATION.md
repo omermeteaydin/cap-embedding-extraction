@@ -344,3 +344,121 @@ platform-level fields (`redis_db`, request metadata, etc.) from `context`
      against the installed package version inside
      `src/utils/utils.py::_load_perception_encoder`
   3. Remember the GPU/CUDA requirement — this path does not run on CPU
+ 
+  ---
+
+## 9. Platform Integration Notes
+
+This section documents findings from deploying and testing the package on
+the real NovaVision platform, separate from the code-level implementation
+covered in §1-8.
+
+### 9.1 Flow was silently disabled
+
+The Main flow was found to be in a "Disabled" state (visible only by
+hovering over an icon next to the flow name in the Flows panel). This
+alone explained why several early debug attempts (raising a deliberate
+exception, swapping the `Capsule` base class for `Component`, stripping
+all dependencies) produced no output and no LOG entries at all — the
+container/environment never came up in the first place. Enabling it
+(Set Environment > Web/Media > Edge) made the flow actually execute.
+
+### 9.2 Platform LOG is unreliable — use outputMeta instead
+
+Even with the flow enabled, the platform's LOG screen only ever showed an
+unrelated WebSocket/certificate error
+(`wss://cpu.api.novavision.ai:7002`, `ERR_CERT_DATE_INVALID`), never the
+real Python traceback. To work around this, `ClipGenerate.bootstrap()`
+and `.run()` were temporarily wrapped in try/except blocks that write the
+exception type, message, and traceback (split into a line list, not one
+long string — a long string was misinterpreted by the platform UI as
+base64 image data and rendered as an "Image Preview" instead of text)
+into `outputMeta`. This surfaced the real error directly in the flow's
+Output/Raw tab without depending on LOG streaming.
+
+### 9.3 Root cause: missing `open_clip_torch` dependency
+
+The real error, caught via the above technique:
+```
+ModuleNotFoundError: No module named 'open_clip'
+```
+
+Investigation showed the platform does **not** install dependencies from
+the package repo's `setup.py` or `requirements.txt` — this was later
+confirmed by an internal team-wide announcement ("setup.py dosyaları
+şu anda işlevsizdir. Gerekli paketler ... ilgili image dosyasındaki
+requirements.txt'ye eklenmesi gerekir"). Instead, the platform builds
+containers from a **separate** image repository
+(`novavision-ai/image-pytorch`), whose own `requirements.prod` /
+`requirements.dev` files did not list `open_clip_torch` (and did not
+explicitly pin `torch` either — it was only pulled in transitively via
+`ultralytics`).
+
+Fix applied: a `develop-embedding` branch was opened from `develop` in
+`image-pytorch`, adding to both `requirements.prod` and
+`requirements.dev`:
+```
+torch==2.13.0
+open_clip_torch==3.3.0
+```
+Pushed to `https://github.com/novavision-ai/image-pytorch/tree/develop-embedding`.
+
+### 9.4 Container image size
+
+Measured directly from PyPI package metadata (not estimated): the full
+dependency chain for GPU-enabled `torch` (its default PyPI distribution
+on Linux pulls in CUDA toolkit components — cuDNN, NCCL, etc.) totals
+approximately **1.6 GB**. This is required because the package's
+`PerceptionEncoder` executor needs GPU/CUDA; the CLIP-only path
+(`ClipGenerate`, `ClipComparison`) does not require a GPU and could use a
+CPU-only `torch` build (~200-500 MB) if Perception Encoder support were
+ever dropped or split into a separate image.
+
+### 9.5 Detection-crop flow — a ready-made "Crop" component exists
+
+Hocam's stated priority (detection-based embedding before whole-image
+embedding, see the original meeting transcript) does not require any
+additional cropping code in this package. Roboflow's own architecture
+(`Object Detection → Dynamic Crop → CLIP`, as separate chained blocks)
+was mirrored: the platform's component library already includes a
+`Crop` component with a `Dynamic` task (alongside `Absolute`,
+`Relative`, `ROI`), which takes `image` + `detections` as input and
+outputs a cropped image per detection — functionally equivalent to
+Roboflow's `Dynamic Crop` block. No new capsule was needed.
+
+Working flow topology (verified in the platform's flow editor, not yet
+executed end-to-end due to the blocker in §9.6):
+```
+Image Load --(image)--> Yolo Inference --(image)--> [passthrough]
+Image Load --(image)--> Crop.image
+Yolo Inference --(detections)--> Crop.detections
+Crop (Task: Dynamic) --(crop output)--> ClipGenerate.data
+```
+
+### 9.6 Current blocker: container build/registry failure
+
+After adding the dependency (§9.3) and registering a new platform Image
+record (Name: `EmbeddingPytorch`, pointing at the `image-pytorch`
+`develop-embedding` branch), starting the container fails with the
+container status flipping to **"Deleted"** and the following error
+visible in the Docker manager log:
+```
+DockerManager - An error occurred while creating the Docker container:
+404 Client Error for http+docker://localhost/v1.55/images/create?...:
+Not Found ("pull access denied for
+omermeteaydin-workspace-embeddingpytorch, repository does not exist or
+may require 'docker login'")
+```
+
+This indicates the platform expects to `docker pull` a pre-built image
+from a registry, rather than building one directly from the GitHub repo
+at container-start time. No such image currently exists in the
+registry — the "Create Image" form in the platform only registers
+metadata (name, repo URL, branch) and does not itself trigger a
+build-and-push step. Whether that build/push is triggered automatically,
+requires a manual step, or requires the source repo/image to be public
+is unresolved as of this writing; escalated to Uğur Yıldız
+(`@ugur.yildiz`) for clarification. **No embedding output has been
+successfully produced on the real platform yet** — all verification to
+date (§8) was performed with randomly-initialized weights in an isolated
+environment, not with real downloaded weights on the target platform.
