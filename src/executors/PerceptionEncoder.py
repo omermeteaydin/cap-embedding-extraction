@@ -23,7 +23,10 @@ class PerceptionEncoder(Capsule):
     def __init__(self, request, bootstrap):
         super().__init__(request, bootstrap)
         self.request.model = PackageModel(**(self.request.data))
-        self.input_data = self.request.get_param("inputData")
+        input_data = self.request.get_param("inputData")
+        if isinstance(input_data, list) and len(input_data) == 1:
+            input_data = input_data[0]
+        self.input_data = input_data
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
