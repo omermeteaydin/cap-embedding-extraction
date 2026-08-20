@@ -200,6 +200,17 @@ class InputComparisonImage(Input):
     value: Image
     type: Literal["object"] = "object"
 
+    @validator("value", pre=True)
+    def unwrap_single_item_list(cls, value):
+        if isinstance(value, list):
+            if len(value) == 1:
+                return value[0]
+            raise ValueError(
+                f"inputImage.value received a list with {len(value)} items; "
+                "expected exactly one image."
+            )
+        return value
+
     class Config:
         title = "Image"
 
