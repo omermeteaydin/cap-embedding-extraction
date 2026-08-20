@@ -14,6 +14,25 @@ class InputData(Input):
     value: Union[Image, str]
     type: str = "object"
 
+    @validator("value", pre=True)
+    def unwrap_single_item_list(cls, value):
+        """
+        The platform's ImageLoad component sometimes sends the image
+        wrapped in a single-item list (e.g. [{"name": "Image_...", ...}])
+        instead of a bare Image dict. If we receive a list with exactly
+        one item, unwrap it so downstream validation (Union[Image, str])
+        succeeds as before. A list with more/fewer than one item is
+        rejected explicitly rather than silently guessing.
+        """
+        if isinstance(value, list):
+            if len(value) == 1:
+                return value[0]
+            raise ValueError(
+                f"inputData.value received a list with {len(value)} items; "
+                "expected exactly one image (batch input is not supported)."
+            )
+        return value
+
     @validator("type", pre=True, always=True)
     def set_type_based_on_value(cls, value, values):
         value = values.get('value')
