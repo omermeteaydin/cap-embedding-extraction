@@ -219,10 +219,23 @@ class InputComparisonClasses(Input):
     """
     Free-text labels to compare the image against, e.g. ["boat", "buoy",
     "obstacle"]. Same role as Roboflow clip_comparison's `classes` field.
+
+    type is "object" (not "list") to match the platform's built-in
+    TextInput/List component, which declares its own outputList as type
+    "object" (confirmed via the flow's Request/Preview panels: e.g.
+    "IJpQxM-outputList": "object"). The flow engine appears to require the
+    input's declared type to match the connected output's declared type
+    before it will route data between them -- with type="list" here (vs
+    "object" upstream) the connection was accepted visually in Screen
+    Builder but ClipComparison was never actually invoked at runtime (no
+    "Test - Package ... ClipComparison" log line, Outputs stayed empty),
+    and deploy failed with "Release not generated. Please check your
+    flow." The actual Python value (List[str]) is unchanged -- only this
+    routing-metadata label changes.
     """
     name: Literal["inputClasses"] = "inputClasses"
     value: List[str] = Field(default_factory=list)
-    type: Literal["list"] = "list"
+    type: Literal["object"] = "object"
 
     class Config:
         title = "Classes"
