@@ -10,6 +10,7 @@ type of vessel is this").
 
 import os
 import sys
+import traceback
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../"))
 
@@ -31,30 +32,78 @@ class ClipComparison(Capsule):
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
-        loader = load_clip_comparison_loader(config=config)
-        return {"loader": loader}
+        # TEMPORARY DEBUG: same reasoning as ClipGenerate.bootstrap -- the
+        # platform LOG only shows a bare exception message (no traceback,
+        # e.g. just "'value'" for a KeyError), so bootstrap failures are
+        # caught here and handed to run() via the returned dict instead of
+        # raising -- raising here would prevent run() (and outputMeta) from
+        # ever being reached.
+        # Remove this try/except once platform logging is confirmed reliable.
+        try:
+            loader = load_clip_comparison_loader(config=config)
+            return {"loader": loader, "bootstrap_error": None}
+        except Exception as exc:
+            tb = traceback.format_exc()
+            print(f"[ClipComparison.bootstrap] DEBUG ERROR:\n{tb}", file=sys.stderr, flush=True)
+            return {
+                "loader": None,
+                "bootstrap_error": {
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                    "traceback": tb,
+                },
+            }
 
     def run(self):
-        loader = self.bootstrap["loader"]
+        # TEMPORARY DEBUG: same reasoning as ClipGenerate.run -- surfaces the
+        # real exception (type + message + traceback) inside outputMeta so it
+        # is visible in the flow's Output/Raw tab without depending on
+        # platform LOG streaming. The traceback is split into a list of
+        # lines (rather than one long string) because the platform's UI
+        # misinterpreted a long single string as base64 image data and
+        # rendered an "Image Preview" instead of the text.
+        # Remove this try/except once platform LOG is confirmed reliable.
+        bootstrap_error = self.bootstrap.get("bootstrap_error")
+        if bootstrap_error:
+            meta = {
+                "DEBUG_STAGE": "bootstrap",
+                "DEBUG_ERROR_TYPE": bootstrap_error["type"],
+                "DEBUG_ERROR_MESSAGE": bootstrap_error["message"],
+                "DEBUG_TRACEBACK_LINES": bootstrap_error["traceback"].splitlines(),
+            }
+            return build_clip_comparison_response(context=self, similarities={}, meta=meta)
 
-        image = Image.get_frame(img=self.input_image, redis_db=self.redis_db)
-        image_array = image.value if image is not None else None
-        classes = list(self.input_classes) if self.input_classes else []
+        try:
+            loader = self.bootstrap["loader"]
 
-        similarities = loader.compare_image_to_texts(image_array, classes)
+            image = Image.get_frame(img=self.input_image, redis_db=self.redis_db)
+            image_array = image.value if image is not None else None
+            classes = list(self.input_classes) if self.input_classes else []
 
-        meta = {
-            "model_family": loader.model_family,
-            "model_version": loader.model_version,
-            "num_classes": len(classes),
-        }
+            similarities = loader.compare_image_to_texts(image_array, classes)
 
-        packageModel = build_clip_comparison_response(
-            context=self,
-            similarities=similarities,
-            meta=meta,
-        )
-        return packageModel
+            meta = {
+                "model_family": loader.model_family,
+                "model_version": loader.model_version,
+                "num_classes": len(classes),
+            }
+
+            packageModel = build_clip_comparison_response(
+                context=self,
+                similarities=similarities,
+                meta=meta,
+            )
+            return packageModel
+        except Exception as exc:
+            tb = traceback.format_exc()
+            print(f"[ClipComparison.run] DEBUG ERROR:\n{tb}", file=sys.stderr, flush=True)
+            meta = {
+                "DEBUG_STAGE": "run",
+                "DEBUG_ERROR_TYPE": type(exc).__name__,
+                "DEBUG_ERROR_MESSAGE": str(exc),
+                "DEBUG_TRACEBACK_LINES": tb.splitlines(),
+            }
+            return build_clip_comparison_response(context=self, similarities={}, meta=meta)
 
 
 if "__main__" == __name__:
