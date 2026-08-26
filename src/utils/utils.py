@@ -46,8 +46,21 @@ def _build_clip_generate_cfg(config):
     advance = application.get_param(config=config, name="ConfigClipGenerateAdvance")
 
     if advance == "True":
-        version = application.get_param(config=config, name="ClipGenerateVersion")
-        normalize = application.get_param(config=config, name="ClipGenerateNormalize")
+        # DEFENSIVE: the platform UI does not currently render nested
+        # "Advance > Enable" sub-fields at all, so ClipGenerateVersion /
+        # ClipGenerateNormalize may simply not exist in `config` even
+        # though Advance="True". Application().get_param() has been
+        # observed to raise (KeyError: 'value') rather than return None
+        # in that case -- catch it and fall back to defaults instead of
+        # letting bootstrap() crash.
+        try:
+            version = application.get_param(config=config, name="ClipGenerateVersion")
+        except Exception:
+            version = None
+        try:
+            normalize = application.get_param(config=config, name="ClipGenerateNormalize")
+        except Exception:
+            normalize = None
         return SimpleNamespace(
             model_family="CLIP",
             model_version=version or "ViT-B-16",
@@ -72,7 +85,13 @@ def _build_clip_comparison_cfg(config):
     advance = application.get_param(config=config, name="ConfigClipComparisonAdvance")
 
     if advance == "True":
-        version = application.get_param(config=config, name="ClipComparisonVersion")
+        # DEFENSIVE: same reasoning as _build_clip_generate_cfg above --
+        # ClipComparisonVersion may not exist in `config` if the nested
+        # Advance>Enable field never rendered in the UI.
+        try:
+            version = application.get_param(config=config, name="ClipComparisonVersion")
+        except Exception:
+            version = None
         return SimpleNamespace(
             model_family="CLIP",
             model_version=version or "ViT-B-16",
@@ -93,8 +112,15 @@ def _build_perception_encoder_cfg(config):
     advance = application.get_param(config=config, name="ConfigPerceptionEncoderAdvance")
 
     if advance == "True":
-        version = application.get_param(config=config, name="PerceptionEncoderVersion")
-        normalize = application.get_param(config=config, name="PerceptionEncoderNormalize")
+        # DEFENSIVE: same reasoning as _build_clip_generate_cfg above.
+        try:
+            version = application.get_param(config=config, name="PerceptionEncoderVersion")
+        except Exception:
+            version = None
+        try:
+            normalize = application.get_param(config=config, name="PerceptionEncoderNormalize")
+        except Exception:
+            normalize = None
         return SimpleNamespace(
             model_family="PerceptionEncoder",
             model_version=version or "PE-Core-B16-224",

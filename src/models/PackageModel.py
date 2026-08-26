@@ -107,8 +107,18 @@ class ConfigClipGenerateAdvanceTrue(Config):
     value: Literal["True"] = "True"
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
-    configClipGenerateVersion: ConfigClipGenerateVersion
-    configClipGenerateNormalize: ConfigClipGenerateNormalize
+    # Optional (not required): the platform UI does not currently render
+    # nested "Advance > Enable" sub-fields at all (confirmed for every
+    # executor in this package). If these were required, selecting
+    # "Enable" with no way to fill them in would make
+    # PackageModel(**self.request.data) raise a pydantic ValidationError
+    # inside the executor's __init__ -- BEFORE the debug try/except in
+    # bootstrap()/run() can catch it, producing total silent failure
+    # (no output, no debug meta, nothing). Making them Optional lets
+    # "Enable" degrade to the same defaults as "Disable" instead of
+    # crashing, until the platform's nested-field rendering is fixed.
+    configClipGenerateVersion: Optional[ConfigClipGenerateVersion] = None
+    configClipGenerateNormalize: Optional[ConfigClipGenerateNormalize] = None
 
     class Config:
         title = "Enable"
@@ -260,7 +270,16 @@ class ConfigClipComparisonAdvanceTrue(Config):
     value: Literal["True"] = "True"
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
-    configClipComparisonVersion: ConfigClipComparisonVersion
+    # Optional -- see the matching comment on ConfigClipGenerateAdvanceTrue.
+    # This is very likely the REAL reason ClipComparison never produced
+    # output all day: if "Advance" was ever set to "Enable" on this node
+    # (a screenshot earlier showed exactly that, with no CLIP Version
+    # field visible underneath), PackageModel(**self.request.data) would
+    # raise a pydantic ValidationError for the missing required
+    # configClipComparisonVersion right in __init__, before any of our
+    # debug try/except code ever runs -- fully independent of the
+    # Classes Input/Config back-and-forth from earlier today.
+    configClipComparisonVersion: Optional[ConfigClipComparisonVersion] = None
 
     class Config:
         title = "Enable"
@@ -390,8 +409,9 @@ class ConfigPerceptionEncoderAdvanceTrue(Config):
     value: Literal["True"] = "True"
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
-    configPerceptionEncoderVersion: ConfigPerceptionEncoderVersion
-    configPerceptionEncoderNormalize: ConfigPerceptionEncoderNormalize
+    # Optional -- see the matching comment on ConfigClipGenerateAdvanceTrue.
+    configPerceptionEncoderVersion: Optional[ConfigPerceptionEncoderVersion] = None
+    configPerceptionEncoderNormalize: Optional[ConfigPerceptionEncoderNormalize] = None
 
     class Config:
         title = "Enable"
