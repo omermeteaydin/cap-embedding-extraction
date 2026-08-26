@@ -217,9 +217,6 @@ class InputComparisonImage(Input):
 
 class InputComparisonClasses(Input):
     """
-    NOT CURRENTLY WIRED (kept for future revert -- see
-    ConfigClipComparisonClasses below for the field actually in use).
-
     Free-text labels to compare the image against, e.g. ["boat", "buoy",
     "obstacle"]. Same role as Roboflow clip_comparison's `classes` field.
 
@@ -235,15 +232,6 @@ class InputComparisonClasses(Input):
     and deploy failed with "Release not generated. Please check your
     flow." The actual Python value (List[str]) is unchanged -- only this
     routing-metadata label changes.
-
-    Beyond that fix, ClipComparison still never fired even with a fresh
-    node and a structurally correct flow. The one thing that reliably
-    distinguishes it from the always-working ClipGenerate is that it has
-    TWO incoming connections (Image Load + Input Text) instead of one --
-    which looks like a separate platform limitation. As a workaround this
-    field was moved to a plain Config the user types directly into the
-    node (ConfigClipComparisonClasses), eliminating the second connection.
-    Revert to this Input once the platform issue is confirmed fixed.
     """
     name: Literal["inputClasses"] = "inputClasses"
     value: List[str] = Field(default_factory=list)
@@ -303,54 +291,13 @@ class ConfigClipComparisonAdvance(Config):
         }
 
 
-class ConfigClipComparisonClasses(Config):
-    """
-    WORKAROUND field (see the long comment on InputComparisonClasses
-    above for why): the class labels to compare the image against, typed
-    directly into the node instead of wired in from a separate Input Text
-    component. Comma-separated, e.g. "boat,buoy,person,building".
-
-    Deliberately a plain TOP-LEVEL field on ClipComparisonConfigs (a
-    sibling of configClipComparisonAdvance) rather than nested inside the
-    Advance/Enable dependent-dropdown -- nested "Advance > Enable"
-    sub-fields (like configClipComparisonVersion normally is) were
-    confirmed NOT to render at all in the current platform UI, for every
-    executor in this package, not just this one. Top-level fields (Task,
-    Advance itself) render fine, so this stays top-level until that
-    separate platform bug is fixed.
-
-    field="option" (not a made-up "widget" literal) -- every other single
-    -value leaf config in this file (ConfigClipComparisonVersion,
-    ConfigClipGenerateNormalize, etc.) uses "option" and renders fine,
-    whether its value is a fixed-choice Literal (dropdown) or a plain
-    bool (toggle). "widget" was never used anywhere else in this codebase
-    and the platform UI likely doesn't recognize it, which is why the
-    field didn't render at all on the first attempt. value is a plain
-    str (no Literal choices), so with field="option" the platform should
-    have nothing to build a dropdown from and render free text input
-    instead -- if it renders as an empty/broken dropdown instead, that
-    tells us "option" always means dropdown-only and this platform may
-    not support free-text config values at all.
-    """
-    name: Literal["clipComparisonClasses"] = "ClipComparisonClasses"
-    value: str = ""
-    type: Literal["string"] = "string"
-    field: Literal["option"] = "option"
-
-    class Config:
-        title = "Classes"
-        json_schema_extra = {
-            "shortDescription": "Comma-separated labels"
-        }
-
-
 class ClipComparisonConfigs(Configs):
     configClipComparisonAdvance: ConfigClipComparisonAdvance
-    configClipComparisonClasses: ConfigClipComparisonClasses
 
 
 class ClipComparisonInputs(Inputs):
     inputImage: InputComparisonImage
+    inputClasses: InputComparisonClasses
 
 
 class OutputSimilarities(Output):
