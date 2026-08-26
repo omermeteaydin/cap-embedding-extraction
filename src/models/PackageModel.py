@@ -318,11 +318,24 @@ class ConfigClipComparisonClasses(Config):
     executor in this package, not just this one. Top-level fields (Task,
     Advance itself) render fine, so this stays top-level until that
     separate platform bug is fixed.
+
+    field="option" (not a made-up "widget" literal) -- every other single
+    -value leaf config in this file (ConfigClipComparisonVersion,
+    ConfigClipGenerateNormalize, etc.) uses "option" and renders fine,
+    whether its value is a fixed-choice Literal (dropdown) or a plain
+    bool (toggle). "widget" was never used anywhere else in this codebase
+    and the platform UI likely doesn't recognize it, which is why the
+    field didn't render at all on the first attempt. value is a plain
+    str (no Literal choices), so with field="option" the platform should
+    have nothing to build a dropdown from and render free text input
+    instead -- if it renders as an empty/broken dropdown instead, that
+    tells us "option" always means dropdown-only and this platform may
+    not support free-text config values at all.
     """
     name: Literal["clipComparisonClasses"] = "ClipComparisonClasses"
     value: str = ""
     type: Literal["string"] = "string"
-    field: Literal["widget"] = "widget"
+    field: Literal["option"] = "option"
 
     class Config:
         title = "Classes"
