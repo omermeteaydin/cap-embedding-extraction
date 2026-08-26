@@ -17,10 +17,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../"))
 from sdks.novavision.src.base.capsule import Capsule
 from sdks.novavision.src.helper.executor import Executor
 from sdks.novavision.src.media.image import Image
+from sdks.novavision.src.base.application import Application
 
 from capsules.EmbeddingExtraction.src.models.PackageModel import PackageModel
 from capsules.EmbeddingExtraction.src.utils.response import build_clip_comparison_response
 from capsules.EmbeddingExtraction.src.utils.utils import load_clip_comparison_loader
+
+DEFAULT_CLASSES = "buoy,boat,person,building,water,sky,dog,mountain"
 
 
 class ClipComparison(Capsule):
@@ -28,7 +31,6 @@ class ClipComparison(Capsule):
         super().__init__(request, bootstrap)
         self.request.model = PackageModel(**(self.request.data))
         self.input_image = self.request.get_param("inputImage")
-        self.input_classes = self.request.get_param("inputClasses")
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
@@ -41,12 +43,28 @@ class ClipComparison(Capsule):
         # Remove this try/except once platform logging is confirmed reliable.
         try:
             loader = load_clip_comparison_loader(config=config)
-            return {"loader": loader, "bootstrap_error": None}
+            # Classes is now a Config (see ConfigClipComparisonClasses in
+            # PackageModel.py) instead of a wired Input -- read it the same
+            # way every other config is read in this package: via
+            # Application().get_param() inside bootstrap(), not
+            # self.request.get_param() in __init__/run(). Defensive
+            # try/except because we don't yet know for certain this config
+            # renders/populates correctly on the platform.
+            try:
+                classes_raw = Application().get_param(config=config, name="ClipComparisonClasses")
+            except Exception:
+                classes_raw = None
+            return {
+                "loader": loader,
+                "classes_raw": classes_raw or DEFAULT_CLASSES,
+                "bootstrap_error": None,
+            }
         except Exception as exc:
             tb = traceback.format_exc()
             print(f"[ClipComparison.bootstrap] DEBUG ERROR:\n{tb}", file=sys.stderr, flush=True)
             return {
                 "loader": None,
+                "classes_raw": DEFAULT_CLASSES,
                 "bootstrap_error": {
                     "type": type(exc).__name__,
                     "message": str(exc),
@@ -78,7 +96,8 @@ class ClipComparison(Capsule):
 
             image = Image.get_frame(img=self.input_image, redis_db=self.redis_db)
             image_array = image.value if image is not None else None
-            classes = list(self.input_classes) if self.input_classes else []
+            classes_raw = self.bootstrap.get("classes_raw") or DEFAULT_CLASSES
+            classes = [label.strip() for label in classes_raw.split(",") if label.strip()]
 
             similarities = loader.compare_image_to_texts(image_array, classes)
 
@@ -86,6 +105,7 @@ class ClipComparison(Capsule):
                 "model_family": loader.model_family,
                 "model_version": loader.model_version,
                 "num_classes": len(classes),
+                "classes_raw": classes_raw,
             }
 
             packageModel = build_clip_comparison_response(

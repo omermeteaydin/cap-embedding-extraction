@@ -61,10 +61,14 @@ def _build_clip_generate_cfg(config):
             normalize = application.get_param(config=config, name="ClipGenerateNormalize")
         except Exception:
             normalize = None
+        # normalize comes back as the STRING "True"/"False" (same
+        # convention as `advance` above), not a Python bool -- compare
+        # explicitly rather than treating it as already-a-bool, otherwise
+        # a non-empty "False" string is truthy and normalize is always on.
         return SimpleNamespace(
             model_family="CLIP",
             model_version=version or "ViT-B-16",
-            normalize=normalize if normalize is not None else True,
+            normalize=(normalize == "True") if normalize is not None else True,
             device="cpu",  # GPU is not required for CLIP; CUDA is used automatically if available
         )
 
@@ -124,7 +128,7 @@ def _build_perception_encoder_cfg(config):
         return SimpleNamespace(
             model_family="PerceptionEncoder",
             model_version=version or "PE-Core-B16-224",
-            normalize=normalize if normalize is not None else True,
+            normalize=(normalize == "True") if normalize is not None else True,
             device="cuda",  # Perception Encoder requires GPU/CUDA
         )
 
