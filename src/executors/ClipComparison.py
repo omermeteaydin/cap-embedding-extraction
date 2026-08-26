@@ -28,7 +28,11 @@ class ClipComparison(Capsule):
         super().__init__(request, bootstrap)
         self.request.model = PackageModel(**(self.request.data))
         self.input_image = self.request.get_param("inputImage")
-        self.input_classes = self.request.get_param("inputClasses")
+        # WORKAROUND: Classes used to be a wired Input (inputClasses, see
+        # InputComparisonClasses in PackageModel.py for why it was moved).
+        # It is now a plain Config the user types directly into the node:
+        # a comma-separated string, e.g. "boat,buoy,person,building".
+        self.classes_raw = self.request.get_param("clipComparisonClasses")
 
     @staticmethod
     def bootstrap(config: dict) -> dict:
@@ -78,7 +82,11 @@ class ClipComparison(Capsule):
 
             image = Image.get_frame(img=self.input_image, redis_db=self.redis_db)
             image_array = image.value if image is not None else None
-            classes = list(self.input_classes) if self.input_classes else []
+            classes = [
+                label.strip()
+                for label in (self.classes_raw or "").split(",")
+                if label.strip()
+            ]
 
             similarities = loader.compare_image_to_texts(image_array, classes)
 
