@@ -91,7 +91,14 @@ class ConfigClipGenerateVersion(Config):
 class ConfigClipGenerateNormalize(Config):
     """Whether the output embedding should be L2-normalized."""
     name: Literal["clipGenerateNormalize"] = "ClipGenerateNormalize"
-    value: Literal["True"] = "True"
+    # REVERTED to plain bool: the Literal["True"] experiment (matching
+    # Advance's True/False discriminator string) broke ClipGenerate --
+    # Advance's value is a Union discriminator the SDK stringifies
+    # specially, but a leaf bool field like this one is very likely sent
+    # by the platform as a real JSON boolean, not a string. Forcing
+    # Literal["True"] made pydantic reject an actual `true`/`false`
+    # value, crashing PackageModel(**self.request.data) in __init__.
+    value: bool = True
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
 
@@ -436,13 +443,11 @@ class ConfigPerceptionEncoderVersion(Config):
 
 class ConfigPerceptionEncoderNormalize(Config):
     name: Literal["perceptionEncoderNormalize"] = "PerceptionEncoderNormalize"
-    # Literal["True"] string, not a Python bool -- matches
-    # ConfigClipGenerateNormalize's fix (see that class's history) and
-    # the Advance True/False pattern used throughout this file. The
-    # platform appears to hand config values back as strings ("True"/
-    # "False"), confirmed by the existing `if advance == "True":` string
-    # comparisons in utils.py.
-    value: Literal["True"] = "True"
+    # REVERTED to plain bool -- see the matching comment on
+    # ConfigClipGenerateNormalize. The Literal["True"] experiment broke
+    # ClipGenerate, so undoing it here too for consistency/safety even
+    # though PerceptionEncoder isn't actively exercised in this environment.
+    value: bool = True
     type: Literal["bool"] = "bool"
     field: Literal["option"] = "option"
 
