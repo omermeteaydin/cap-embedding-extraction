@@ -25,6 +25,14 @@ from capsules.EmbeddingExtraction.src.utils.utils import load_clip_comparison_lo
 
 DEFAULT_CLASSES = "buoy,boat,person,building,water,sky,dog,mountain"
 
+# Maps the dependentDropdownlist discriminator (see ConfigClipComparisonClasses
+# in PackageModel.py) to the actual comma-separated label string.
+CLASSES_PRESETS = {
+    "Preset_Buoy": "buoy,boat,person,building,water,sky,dog,mountain",
+    "Preset_Dock": "boat,buoy,dock,person,horizon,obstacle",
+    "Preset_Vessel": "vessel,buoy,shore,water,sky",
+}
+
 
 class ClipComparison(Capsule):
     def __init__(self, request, bootstrap):
@@ -43,20 +51,21 @@ class ClipComparison(Capsule):
         # Remove this try/except once platform logging is confirmed reliable.
         try:
             loader = load_clip_comparison_loader(config=config)
-            # Classes is now a Config (see ConfigClipComparisonClasses in
-            # PackageModel.py) instead of a wired Input -- read it the same
-            # way every other config is read in this package: via
-            # Application().get_param() inside bootstrap(), not
-            # self.request.get_param() in __init__/run(). Defensive
-            # try/except because we don't yet know for certain this config
-            # renders/populates correctly on the platform.
+            # Classes is now a dependentDropdownlist Config (see
+            # ConfigClipComparisonClasses in PackageModel.py) instead of a
+            # wired Input -- read the SAME way Advance is read: the
+            # discriminator name ("Preset_Buoy" etc.), not a raw string
+            # value. Defensive try/except because we don't yet know for
+            # certain this config renders/populates correctly on the
+            # platform.
             try:
-                classes_raw = Application().get_param(config=config, name="ClipComparisonClasses")
+                classes_choice = Application().get_param(config=config, name="ConfigClipComparisonClasses")
             except Exception:
-                classes_raw = None
+                classes_choice = None
+            classes_raw = CLASSES_PRESETS.get(classes_choice, DEFAULT_CLASSES)
             return {
                 "loader": loader,
-                "classes_raw": classes_raw or DEFAULT_CLASSES,
+                "classes_raw": classes_raw,
                 "bootstrap_error": None,
             }
         except Exception as exc:

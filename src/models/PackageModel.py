@@ -317,46 +317,73 @@ class ConfigClipComparisonAdvance(Config):
         }
 
 
-class ConfigClipComparisonClasses(Config):
-    """
-    THIRD attempt at a Classes workaround (see the long comment on
-    InputComparisonClasses for the first two). Container logs now prove
-    bootstrap() succeeds fully (model + weights load OK) but run() is
-    NEVER invoked when the node has two incoming connections (Image +
-    Input Text) -- confirmed by the total absence of any of our debug
-    prints or a "Test - Package" log line. This points at the platform's
-    flow engine, not our code.
-
-    Earlier free-text Config attempts (field="widget", then field=
-    "option" with a plain `str` value) never rendered in the node's
-    settings panel at all. The ONE config pattern confirmed to render on
-    this platform is a fixed-choice Literal + field="option" (exactly
-    how ConfigClipComparisonVersion is declared) -- so this uses a
-    Literal enum of preset comma-separated label sets instead of free
-    text, as a test of whether the platform's Config system only
-    supports finite/dropdown values and never open text entry.
-
-    This is a compromise, not the final design: it only offers a few
-    preset label sets rather than fully free-form text like Roboflow's
-    `classes` input. If this renders and works, it at least proves the
-    package's CLIP logic works end-to-end on the platform (matching the
-    already-confirmed-correct local test); the free-text capability
-    would need to be revisited once the underlying platform limitations
-    are fixed or clarified by the team.
-    """
-    name: Literal["clipComparisonClasses"] = "ClipComparisonClasses"
-    value: Literal[
-        "buoy,boat,person,building,water,sky,dog,mountain",
-        "boat,buoy,dock,person,horizon,obstacle",
-        "vessel,buoy,shore,water,sky",
-    ] = "buoy,boat,person,building,water,sky,dog,mountain"
+class ConfigClipComparisonClassesA(Config):
+    name: Literal["Preset_Buoy"] = "Preset_Buoy"
+    value: Literal["Preset_Buoy"] = "Preset_Buoy"
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
 
     class Config:
+        title = "buoy, boat, person, building, water, sky, dog, mountain"
+
+
+class ConfigClipComparisonClassesB(Config):
+    name: Literal["Preset_Dock"] = "Preset_Dock"
+    value: Literal["Preset_Dock"] = "Preset_Dock"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "boat, buoy, dock, person, horizon, obstacle"
+
+
+class ConfigClipComparisonClassesC(Config):
+    name: Literal["Preset_Vessel"] = "Preset_Vessel"
+    value: Literal["Preset_Vessel"] = "Preset_Vessel"
+    type: Literal["string"] = "string"
+    field: Literal["option"] = "option"
+
+    class Config:
+        title = "vessel, buoy, shore, water, sky"
+
+
+class ConfigClipComparisonClasses(Config):
+    """
+    FOURTH attempt at a Classes workaround (see the long comment history
+    on InputComparisonClasses for the first three). Container logs now
+    prove bootstrap() succeeds fully (model + weights load OK, container
+    fully warmed up -- ruled out cold-start timing) but the node still
+    produces no output and, critically, this field itself never rendered
+    in the settings panel with field="option" (tried both a plain `str`
+    and a Literal-enum `str` value -- neither showed up).
+
+    The ONLY field pattern confirmed to actually render in this
+    platform's UI, at any nesting level, is field="dependentDropdownlist"
+    with a Union of full Config subclasses as `value` -- exactly how
+    Task (ConfigExecutor) and Advance (ConfigClipComparisonAdvance) are
+    both declared, and both of those DO render and are clickable/
+    selectable (confirmed via screenshots). field="option" has never
+    once been confirmed to render standalone, nested or not -- it may
+    only ever render as a sub-field INSIDE an already-selected
+    dependentDropdownlist branch (which is itself broken for Advance's
+    nested sub-fields, per the platform bug documented elsewhere in this
+    file). So this rebuilds Classes using that same dependentDropdownlist
+    pattern: each preset is its own full Config subclass (mirroring
+    ConfigClipComparisonAdvanceTrue/False), selected via a Union.
+    """
+    name: Literal["ConfigClipComparisonClasses"] = "ConfigClipComparisonClasses"
+    value: Union[
+        ConfigClipComparisonClassesA,
+        ConfigClipComparisonClassesB,
+        ConfigClipComparisonClassesC,
+    ]
+    type: Literal["object"] = "object"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    class Config:
         title = "Classes (preset)"
         json_schema_extra = {
-            "shortDescription": "Comma-separated preset label set"
+            "shortDescription": "Pick a preset label set"
         }
 
 
