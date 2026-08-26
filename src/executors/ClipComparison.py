@@ -51,18 +51,15 @@ class ClipComparison(Capsule):
         # Remove this try/except once platform logging is confirmed reliable.
         try:
             loader = load_clip_comparison_loader(config=config)
-            # Classes is now a dependentDropdownlist Config (see
-            # ConfigClipComparisonClasses in PackageModel.py) instead of a
-            # wired Input -- read the SAME way Advance is read: the
-            # discriminator name ("Preset_Buoy" etc.), not a raw string
-            # value. Defensive try/except because we don't yet know for
-            # certain this config renders/populates correctly on the
-            # platform.
-            try:
-                classes_choice = Application().get_param(config=config, name="ConfigClipComparisonClasses")
-            except Exception:
-                classes_choice = None
-            classes_raw = CLASSES_PRESETS.get(classes_choice, DEFAULT_CLASSES)
+            # Classes UI field removed from PackageModel.py (see the
+            # comment on ClipComparisonConfigs there) -- it was declared
+            # REQUIRED but the platform never rendered/sent it, which was
+            # crashing PackageModel(**self.request.data) in __init__
+            # before this code ever ran. Falling back to the fixed
+            # DEFAULT_CLASSES list for now so we can confirm the node
+            # actually produces output at all. CLASSES_PRESETS kept for
+            # when we re-attempt a working UI field for this.
+            classes_raw = DEFAULT_CLASSES
             return {
                 "loader": loader,
                 "classes_raw": classes_raw,

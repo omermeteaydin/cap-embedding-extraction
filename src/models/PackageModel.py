@@ -388,8 +388,21 @@ class ConfigClipComparisonClasses(Config):
 
 
 class ClipComparisonConfigs(Configs):
+    # FIFTH attempt / root cause found: configClipComparisonClasses was
+    # declared as a REQUIRED field here. The platform never renders this
+    # dropdown at all (confirmed: no "Classes (preset)" field showed up in
+    # the settings panel even with the dependentDropdownlist pattern that
+    # DOES work for Advance/Task), so it never sends a value for it either.
+    # A required-but-unpopulated field makes PackageModel(**self.request.data)
+    # raise a pydantic ValidationError right inside the executor's __init__,
+    # BEFORE bootstrap()/run()'s debug try/except ever runs -- total silent
+    # failure, zero output, nothing in LOG. This is the exact same failure
+    # shape as the Advance nested-fields bug fixed elsewhere in this file.
+    # Dropping the field here (definition kept above, just unused) so
+    # Classes falls back to ClipComparison.py's DEFAULT_CLASSES constant --
+    # priority right now is getting ANY real output before re-attempting a
+    # UI-editable Classes field.
     configClipComparisonAdvance: ConfigClipComparisonAdvance
-    configClipComparisonClasses: ConfigClipComparisonClasses
 
 
 class ClipComparisonInputs(Inputs):
