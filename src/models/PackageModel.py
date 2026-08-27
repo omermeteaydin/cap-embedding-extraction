@@ -249,9 +249,18 @@ class InputComparisonClasses(Input):
     and deploy failed with "Release not generated. Please check your
     flow." The actual Python value (List[str]) is unchanged -- only this
     routing-metadata label changes.
+
+    `value` has NO default (matches ObjectTracking's working
+    InputDetections: `value: List`, also no default) -- a `Field(default_
+    factory=list)` here was very likely why the platform never rendered a
+    second connector dot for this node at all: a field with a default
+    looks "optional" to the platform's port-generation logic, so it may
+    simply skip drawing a connection point for it. Required fields (no
+    default), like every other working 2-input capsule in this codebase,
+    get a port.
     """
     name: Literal["inputClasses"] = "inputClasses"
-    value: List[str] = Field(default_factory=list)
+    value: List[str]
     type: Literal["object"] = "object"
 
     class Config:
