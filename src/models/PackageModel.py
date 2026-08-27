@@ -76,7 +76,7 @@ class OutputMeta(Output):
 
 class ConfigClipGenerateVersion(Config):
     """CLIP backbone / resolution variant."""
-    name: Literal["clipGenerateVersion"] = "ClipGenerateVersion"
+    name: Literal["clipGenerateVersion"] = "clipGenerateVersion"
     value: Literal["ViT-B-16", "ViT-B-32", "RN50"] = "ViT-B-16"
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
@@ -90,7 +90,7 @@ class ConfigClipGenerateVersion(Config):
 
 class ConfigClipGenerateNormalize(Config):
     """Whether the output embedding should be L2-normalized."""
-    name: Literal["clipGenerateNormalize"] = "ClipGenerateNormalize"
+    name: Literal["clipGenerateNormalize"] = "clipGenerateNormalize"
     # REVERTED to plain bool: the Literal["True"] experiment (matching
     # Advance's True/False discriminator string) broke ClipGenerate --
     # Advance's value is a Union discriminator the SDK stringifies
@@ -249,18 +249,9 @@ class InputComparisonClasses(Input):
     and deploy failed with "Release not generated. Please check your
     flow." The actual Python value (List[str]) is unchanged -- only this
     routing-metadata label changes.
-
-    `value` has NO default (matches ObjectTracking's working
-    InputDetections: `value: List`, also no default) -- a `Field(default_
-    factory=list)` here was very likely why the platform never rendered a
-    second connector dot for this node at all: a field with a default
-    looks "optional" to the platform's port-generation logic, so it may
-    simply skip drawing a connection point for it. Required fields (no
-    default), like every other working 2-input capsule in this codebase,
-    get a port.
     """
     name: Literal["inputClasses"] = "inputClasses"
-    value: List[str]
+    value: List[str] = Field(default_factory=list)
     type: Literal["object"] = "object"
 
     class Config:
@@ -269,7 +260,7 @@ class InputComparisonClasses(Input):
 
 class ConfigClipComparisonVersion(Config):
     """CLIP backbone / resolution variant."""
-    name: Literal["clipComparisonVersion"] = "ClipComparisonVersion"
+    name: Literal["clipComparisonVersion"] = "clipComparisonVersion"
     value: Literal["ViT-B-16", "ViT-B-32", "RN50"] = "ViT-B-16"
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
@@ -489,7 +480,7 @@ class ClipComparisonExecutor(Config):
 
 class ConfigPerceptionEncoderVersion(Config):
     """Perception Encoder backbone / resolution variant."""
-    name: Literal["perceptionEncoderVersion"] = "PerceptionEncoderVersion"
+    name: Literal["perceptionEncoderVersion"] = "perceptionEncoderVersion"
     value: Literal["PE-Core-B16-224", "PE-Core-L14-336"] = "PE-Core-B16-224"
     type: Literal["string"] = "string"
     field: Literal["option"] = "option"
@@ -502,7 +493,7 @@ class ConfigPerceptionEncoderVersion(Config):
 
 
 class ConfigPerceptionEncoderNormalize(Config):
-    name: Literal["perceptionEncoderNormalize"] = "PerceptionEncoderNormalize"
+    name: Literal["perceptionEncoderNormalize"] = "perceptionEncoderNormalize"
     # REVERTED to plain bool -- see the matching comment on
     # ConfigClipGenerateNormalize. The Literal["True"] experiment broke
     # ClipGenerate, so undoing it here too for consistency/safety even
