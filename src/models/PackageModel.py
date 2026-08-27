@@ -406,7 +406,18 @@ class ClipComparisonConfigs(Configs):
 
 
 class ClipComparisonInputs(Inputs):
+    # REVERTED to the original 2-input design (Image + Classes both wired
+    # Inputs) to match the package's intended structure, mirroring
+    # Roboflow's clip_comparison@v2 (`images` + `classes`). All the
+    # Config-based Classes experiments today (widget / option / a full
+    # dependentDropdownlist) never rendered in the platform UI regardless
+    # of pattern, and removing Classes from Configs entirely still didn't
+    # get ClipComparison invoked (confirmed via both docker logs and the
+    # platform's own in-app Logs panel showing zero "ClipComparison" test
+    # entries) -- so the Config-field route is not the fix. Going back to
+    # the original Input-based shape instead.
     inputImage: InputComparisonImage
+    inputClasses: InputComparisonClasses
 
 
 class OutputSimilarities(Output):
